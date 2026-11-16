@@ -449,6 +449,7 @@ export default function App() {
                 setAddMealOpen(true)
               }}
               onOpenAddWeight={() => setAddWeightOpen(true)}
+              onOpenAddStep={() => setAddStepOpen(true)}
               onToggleMealStatus={handleToggleMealStatus}
               onNavigateToMealPlan={() => setCurrentView("mealplan")}
             />

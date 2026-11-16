@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { saveDailyStepLog } from "@/lib/exerciseDatabase"
+import { getCalorieSettings, saveCalorieSettings } from "@/lib/calorieSettings"
 import { callGasApi } from "@/api/gasClient"
 import { Footprints, Flame, Navigation, Target } from "lucide-react"
 import { toast } from "sonner"
@@ -19,6 +20,7 @@ interface AddStepModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultPerson?: string
+  defaultStepGoal?: number
   onSaved?: () => void
 }
 
@@ -26,24 +28,30 @@ export function AddStepModal({
   open,
   onOpenChange,
   defaultPerson = "ฝ่ายชาย",
+  defaultStepGoal,
   onSaved,
 }: AddStepModalProps) {
-  const todayStr = new Date().toISOString().split("T")[0]
+  const todayStr = new Date().toLocaleDateString("en-CA")
   const [date, setDate] = React.useState(todayStr)
   const [person, setPerson] = React.useState<"ฝ่ายชาย" | "ฝ่ายหญิง">(
     defaultPerson === "ฝ่ายหญิง" ? "ฝ่ายหญิง" : "ฝ่ายชาย"
   )
   const [steps, setSteps] = React.useState<number | "">(8000)
-  const [stepGoal, setStepGoal] = React.useState<number>(10000)
+  const [stepGoal, setStepGoal] = React.useState<number>(defaultStepGoal || 8000)
   const [notes, setNotes] = React.useState("")
   const [saving, setSaving] = React.useState(false)
 
   React.useEffect(() => {
     if (open) {
-      setPerson(defaultPerson === "ฝ่ายหญิง" ? "ฝ่ายหญิง" : "ฝ่ายชาย")
-      setDate(todayStr)
+      const activeP = defaultPerson === "ฝ่ายหญิง" ? "ฝ่ายหญิง" : "ฝ่ายชาย"
+      setPerson(activeP)
+      setDate(new Date().toLocaleDateString("en-CA"))
+      const settings = getCalorieSettings()
+      const pGoal = defaultStepGoal || (activeP === "ฝ่ายหญิง" ? settings.female.stepGoal : settings.male.stepGoal) || 8000
+      setStepGoal(pGoal)
+      setSteps(pGoal)
     }
-  }, [open, defaultPerson])
+  }, [open, defaultPerson, defaultStepGoal])
 
   const stepsNum = Number(steps) || 0
   const estDistanceKm = Number((stepsNum * 0.00075).toFixed(2))
@@ -185,6 +193,37 @@ export function AddStepModal({
                   {s.toLocaleString()}
                 </button>
               ))}
+            </div>
+
+            {/* Daily Goal Setting row */}
+            <div className="flex items-center justify-between p-2 rounded-lg bg-[#0b0f19] border border-[#26334d] text-xs">
+              <span className="text-slate-400 flex items-center gap-1 text-[11px]">
+                <Target className="h-3.5 w-3.5 text-amber-400" />
+                เป้าหมายก้าวประจำวัน:
+              </span>
+              <div className="flex items-center gap-1">
+                {[6000, 8000, 10000, 12000].map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => {
+                      setStepGoal(g)
+                      const cur = getCalorieSettings()
+                      const key = person === "ฝ่ายหญิง" ? "female" : "male"
+                      cur[key].stepGoal = g
+                      saveCalorieSettings(cur)
+                      callGasApi("SAVE_CALORIE_SETTINGS", cur).catch(() => {})
+                    }}
+                    className={`text-[10px] px-2 py-0.5 rounded transition-all ${
+                      stepGoal === g
+                        ? "bg-amber-500 text-slate-950 font-bold shadow-sm"
+                        : "text-slate-400 hover:text-white bg-[#111726] border border-[#26334d]/60"
+                    }`}
+                  >
+                    {g.toLocaleString()}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

@@ -293,9 +293,14 @@ function handleGetInitialData(ss) {
   }
   if (!calorieSettings) {
     calorieSettings = {
-      male: { maintenance: 2000, deficit: 300, protein: 120, carbs: 210, fat: 60 },
-      female: { maintenance: 1700, deficit: 300, protein: 104, carbs: 130, fat: 40 }
+      male: { maintenance: 2000, deficit: 300, protein: 120, carbs: 210, fat: 60, stepGoal: 8000 },
+      female: { maintenance: 1700, deficit: 300, protein: 104, carbs: 130, fat: 40, stepGoal: 8000 }
     };
+  } else {
+    if (!calorieSettings.male) calorieSettings.male = { maintenance: 2000, deficit: 300, protein: 120, carbs: 210, fat: 60, stepGoal: 8000 };
+    if (!calorieSettings.female) calorieSettings.female = { maintenance: 1700, deficit: 300, protein: 104, carbs: 130, fat: 40, stepGoal: 8000 };
+    if (!calorieSettings.male.stepGoal) calorieSettings.male.stepGoal = 8000;
+    if (!calorieSettings.female.stepGoal) calorieSettings.female.stepGoal = 8000;
   }
 
   // 5. Projects

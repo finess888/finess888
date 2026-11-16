@@ -24,8 +24,11 @@ import { callGasApi } from "@/api/gasClient"
 import {
   getWorkoutLogs,
   getDailyStepLogs,
+  saveDailyStepLog,
   calculateWorkoutStats,
 } from "@/lib/exerciseDatabase"
+import { getCalorieSettings, saveCalorieSettings } from "@/lib/calorieSettings"
+import { AddStepModal } from "@/components/modals/AddStepModal"
 import { formatThaiDate } from "@/lib/utils"
 import {
   Target,
@@ -44,6 +47,9 @@ import {
   Lightbulb,
   Dumbbell,
   Footprints,
+  Edit3,
+  Check,
+  Settings2,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -88,6 +94,15 @@ export function ProjectReviewModal({
   const [formNotes, setFormNotes] = React.useState("")
   const [reviewNoteInput, setReviewNoteInput] = React.useState("")
 
+  // Step goal & quick logging state
+  const [addStepOpen, setAddStepOpen] = React.useState(false)
+  const [editingStepGoal, setEditingStepGoal] = React.useState(false)
+  const [inputStepGoal, setInputStepGoal] = React.useState<number>(8000)
+  const [formDailySteps, setFormDailySteps] = React.useState<number>(8000)
+  const [quickStepsInput, setQuickStepsInput] = React.useState<number | "">("")
+  const [quickSaving, setQuickSaving] = React.useState(false)
+  const [stepRefreshCount, setStepRefreshCount] = React.useState(0)
+
   React.useEffect(() => {
     if (open) {
       const all = getProjects()
@@ -97,21 +112,128 @@ export function ProjectReviewModal({
       )
       if (personProj) {
         setSelectedProjectId(personProj.id)
+        setInputStepGoal(personProj.targetDailySteps || 8000)
       } else if (all.length > 0) {
         setSelectedProjectId(all[0].id)
+        setInputStepGoal(all[0].targetDailySteps || 8000)
       }
       setFormPerson(currentPerson === "ฝ่ายหญิง" ? "ฝ่ายหญิง" : "ฝ่ายชาย")
       setFormStartWeight(currentPerson === "ฝ่ายหญิง" ? 65.0 : 100.0)
       setFormKg(currentPerson === "ฝ่ายหญิง" ? 5 : 10)
       setFormTitle(`โปรเจกต์ลดไขมัน ${currentPerson === "ฝ่ายหญิง" ? "5" : "10"} กก. (เดดไลน์ใหม่)`)
+      setFormDailySteps(8000)
     }
   }, [open, currentPerson])
 
   const currentProject = projectsList.find((p) => p.id === selectedProjectId) || projectsList[0]
 
+  React.useEffect(() => {
+    if (currentProject?.targetDailySteps) {
+      setInputStepGoal(currentProject.targetDailySteps)
+    }
+  }, [currentProject?.id])
+
   const analysis: ProjectAnalysis | null = currentProject
     ? analyzeProject(currentProject, meals, healthLogs, maintenanceCalories, targetIntakeCalories)
     : null
+
+  // Step Logs & Step Analysis specifically for this project
+  const stepLogs = React.useMemo(() => {
+    const all = getDailyStepLogs()
+    const todayStr = new Date().toLocaleDateString("en-CA")
+    const effectiveEndDate = currentProject?.completedAt
+      ? currentProject.completedAt.split("T")[0]
+      : (todayStr < (currentProject?.deadlineDate || todayStr) ? todayStr : (currentProject?.deadlineDate || todayStr))
+
+    return all.filter((s) => {
+      const matchPerson = currentProject?.person === "ทั้งคู่" || s.person === currentProject?.person
+      const matchDate =
+        (!currentProject?.startDate || s.date >= currentProject.startDate) &&
+        (!effectiveEndDate || s.date <= effectiveEndDate)
+      return matchPerson && matchDate
+    })
+  }, [currentProject, open, addStepOpen, stepRefreshCount])
+
+  const targetDailySteps = currentProject?.targetDailySteps || 8000
+  const totalSteps = stepLogs.reduce((sum, item) => sum + (Number(item.steps) || 0), 0)
+  const daysWithSteps = stepLogs.length
+  const daysHitGoal = stepLogs.filter((s) => Number(s.steps) >= targetDailySteps).length
+  const daysElapsed = analysis?.daysElapsed || 1
+  const avgStepsPerDay = daysWithSteps > 0 ? Math.round(totalSteps / daysWithSteps) : 0
+  const goalProgressPct = Math.min(100, Math.round((avgStepsPerDay / targetDailySteps) * 100))
+  const stepCompliancePct = Math.min(100, Math.round((daysHitGoal / Math.max(1, daysElapsed)) * 100))
+  const totalBurnedCalories = Math.round(totalSteps * 0.035)
+  const totalDistanceKm = Number((totalSteps * 0.00075).toFixed(1))
+
+  const handleSaveStepGoal = async (newGoal: number) => {
+    if (!currentProject) return
+    const updatedProj = { ...currentProject, targetDailySteps: newGoal }
+    const updatedList = projectsList.map((p) => (p.id === currentProject.id ? updatedProj : p))
+    setProjectsList(updatedList)
+    saveProject(updatedProj)
+    onProjectUpdated(updatedProj)
+    setEditingStepGoal(false)
+
+    try {
+      const cSettings = getCalorieSettings()
+      const key = currentProject.person === "ฝ่ายหญิง" ? "female" : "male"
+      cSettings[key].stepGoal = newGoal
+      saveCalorieSettings(cSettings)
+      callGasApi("SAVE_CALORIE_SETTINGS", cSettings).catch(() => {})
+      callGasApi("SAVE_PROJECTS", updatedList).catch(() => {})
+    } catch (e) {}
+
+    toast.success(`บันทึกเป้าหมายก้าวเดิน ${newGoal.toLocaleString()} ก้าว/วัน สำเร็จ!`, {
+      description: "ข้อมูลอัปเดตและซิงค์เชื่อมต่อไปยังทุกอุปกรณ์เรียบร้อย",
+    })
+  }
+
+  const handleQuickLogSteps = async (stepsToLog: number) => {
+    if (!stepsToLog || stepsToLog <= 0) {
+      toast.warning("กรุณาระบุจำนวนก้าวเดิน")
+      return
+    }
+
+    setQuickSaving(true)
+    const todayStr = new Date().toLocaleDateString("en-CA")
+    const person = currentProject?.person === "ฝ่ายหญิง" ? "ฝ่ายหญิง" : "ฝ่ายชาย"
+    const burned = Math.round(stepsToLog * 0.035)
+    const km = Number((stepsToLog * 0.00075).toFixed(2))
+
+    try {
+      saveDailyStepLog({
+        id: "step-" + Date.now(),
+        date: todayStr,
+        person,
+        steps: stepsToLog,
+        distanceKm: km,
+        burnedCalories: burned,
+        stepGoal: targetDailySteps,
+        notes: `ก้าวเดิน ${stepsToLog.toLocaleString()} ก้าว`,
+        createdAt: new Date().toISOString(),
+      })
+
+      callGasApi("ADD_WORKOUT_LOG", {
+        date: todayStr,
+        person,
+        exerciseName: "ก้าวเดินประจำวัน",
+        durationMinutes: Math.round(stepsToLog / 100),
+        burnedCalories: burned,
+        steps: stepsToLog,
+        notes: `เดินสะสมได้ ${stepsToLog.toLocaleString()} ก้าว (~${km} กม.)`,
+      }).catch(() => {})
+
+      setStepRefreshCount((prev) => prev + 1)
+      setQuickStepsInput("")
+      toast.success(`บันทึกก้าวเดิน ${stepsToLog.toLocaleString()} ก้าว เรียบร้อย!`, {
+        description: `ระยะทาง ~${km} กม. | เผาผลาญ ~${burned} kcal (${Math.min(100, Math.round((stepsToLog / targetDailySteps) * 100))}% ของเป้าหมาย)`,
+      })
+    } catch (err: any) {
+      toast.error("เกิดข้อผิดพลาดในการบันทึก")
+    } finally {
+      setQuickSaving(false)
+    }
+  }
 
   const workoutStats = React.useMemo(() => {
     if (!currentProject) return null
@@ -141,7 +263,7 @@ export function ProjectReviewModal({
     })
 
     return calculateWorkoutStats(filteredWorkouts, filteredSteps)
-  }, [currentProject, open])
+  }, [currentProject, open, addStepOpen, stepRefreshCount])
 
   const handleCreateProject = (e: React.FormEvent) => {
     e.preventDefault()
@@ -156,6 +278,7 @@ export function ProjectReviewModal({
       person: formPerson,
       targetFatLossKg: Number(formKg),
       targetDeficitKcal: Number(formKg) * 7500,
+      targetDailySteps: Number(formDailySteps) || 8000,
       startDate: formStartDate,
       deadlineDate: formDeadline,
       startWeight: Number(formStartWeight),
@@ -329,85 +452,186 @@ export function ProjectReviewModal({
                 </div>
               </div>
 
-              {/* Question 2: ออกกำลังกายเป็นยังไง? (Activity & Workout Summary) */}
-              <div className="p-3.5 rounded-xl bg-[#0b0f19] border border-[#26334d] space-y-2">
+              {/* Question 2: การขยับร่างกาย & ก้าวเดิน (Daily Steps Tracker) */}
+              <div className="p-3.5 rounded-xl bg-[#0b0f19] border border-[#26334d] space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-                    <Activity className="h-4 w-4 text-emerald-400" />
-                    2. ออกกำลังกายเป็นยังไง? (Workout & Steps)
+                    <Footprints className="h-4 w-4 text-indigo-400" />
+                    2. ก้าวเดิน & การเคลื่อนไหว (Daily Steps)
                   </span>
-                  <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px]">
-                    {workoutStats && (workoutStats.totalWorkouts > 0 || workoutStats.totalSteps > 0)
-                      ? `${workoutStats.totalWorkouts} ครั้ง • เดินเฉลี่ย ${workoutStats.avgStepsPerDay.toLocaleString()} ก้าว`
-                      : `${analysis.activitiesCount} / ${analysis.daysElapsed} วัน`}
-                  </Badge>
+                  <div className="flex items-center gap-1.5">
+                    <Badge className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30 text-[10px] font-mono">
+                      🎯 เป้า {targetDailySteps.toLocaleString()} ก้าว/วัน
+                    </Badge>
+                    <button
+                      type="button"
+                      onClick={() => setEditingStepGoal(!editingStepGoal)}
+                      className="text-[10px] text-amber-300 hover:text-white flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#151c2e] border border-amber-500/30 hover:bg-amber-500/20 transition-all"
+                      title="แก้ไขเป้าหมายก้าวเดิน"
+                    >
+                      <Edit3 className="h-3 w-3 text-amber-400" />
+                      <span>{editingStepGoal ? "ปิด" : "แก้ไขเป้า"}</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div className="text-xs text-slate-300 space-y-1.5 pt-1">
-                  {workoutStats && (workoutStats.totalWorkouts > 0 || workoutStats.totalSteps > 0) ? (
-                    <>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="p-2 rounded-lg bg-[#111726] border border-[#26334d]">
-                          <div className="flex items-center gap-1 text-[10px] text-slate-400">
-                            <Dumbbell className="h-3 w-3 text-emerald-400" />
-                            <span>ออกกำลังกาย</span>
-                          </div>
-                          <span className="text-sm font-bold text-emerald-400 font-mono">
-                            {workoutStats.totalWorkouts} <span className="text-xs font-normal text-slate-400">ครั้ง</span>
-                          </span>
-                          <span className="text-[10px] text-slate-400 block">
-                            รวม {workoutStats.totalWorkoutMinutes} นาที (~{workoutStats.totalWorkoutCalories.toLocaleString()} kcal)
-                          </span>
-                        </div>
-                        <div className="p-2 rounded-lg bg-[#111726] border border-[#26334d]">
-                          <div className="flex items-center gap-1 text-[10px] text-slate-400">
-                            <Footprints className="h-3 w-3 text-indigo-400" />
-                            <span>ก้าวเดินเฉลี่ย</span>
-                          </div>
-                          <span className="text-sm font-bold text-indigo-400 font-mono">
-                            {workoutStats.avgStepsPerDay.toLocaleString()} <span className="text-xs font-normal text-slate-400">ก้าว/วัน</span>
-                          </span>
-                          <span className="text-[10px] text-slate-400 block">
-                            รวม {workoutStats.totalSteps.toLocaleString()} ก้าว (~{workoutStats.totalStepCalories.toLocaleString()} kcal)
-                          </span>
-                        </div>
-                      </div>
+                {/* Inline Step Goal Editor */}
+                {editingStepGoal && (
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-[#111728] to-[#171d33] border border-amber-500/40 space-y-2 text-xs shadow-inner">
+                    <div className="flex items-center justify-between">
+                      <span className="text-amber-300 text-[11px] font-semibold flex items-center gap-1">
+                        <Target className="h-3.5 w-3.5 text-amber-400" />
+                        ตั้งเป้าหมายก้าวเดินต่อวันใหม่:
+                      </span>
+                      <span className="text-[10px] text-slate-400">(ซิงค์ทุกอุปกรณ์)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={1000}
+                        max={50000}
+                        step={500}
+                        value={inputStepGoal}
+                        onChange={(e) => setInputStepGoal(Number(e.target.value))}
+                        className="bg-[#0b0f19] border-[#26334d] text-white text-xs h-8 font-mono"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => handleSaveStepGoal(inputStepGoal)}
+                        className="bg-amber-600 hover:bg-amber-500 text-white text-xs h-8 px-3 font-semibold shrink-0"
+                      >
+                        <Check className="h-3.5 w-3.5 mr-1" />
+                        บันทึกเป้าหมาย
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-1 pt-0.5 flex-wrap">
+                      <span className="text-[10px] text-slate-400 mr-1">เป้ายอดนิยม:</span>
+                      {[5000, 8000, 10000, 12000, 15000].map((g) => (
+                        <button
+                          key={g}
+                          type="button"
+                          onClick={() => {
+                            setInputStepGoal(g)
+                            handleSaveStepGoal(g)
+                          }}
+                          className={`text-[10px] px-2 py-0.5 rounded transition-all ${
+                            targetDailySteps === g
+                              ? "bg-amber-500 text-slate-950 font-bold"
+                              : "text-slate-300 bg-[#0b0f19] border border-[#26334d] hover:text-white"
+                          }`}
+                        >
+                          {g.toLocaleString()} ก้าว
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                      <div className="flex justify-between items-center pt-1 border-t border-[#26334d]">
-                        <span className="text-slate-400">🔥 เผาผลาญจากการออกกำลัง/ก้าวเดิน:</span>
-                        <strong className="text-amber-400 font-mono font-bold">
-                          +{workoutStats.totalCombinedCalories.toLocaleString()} kcal
-                        </strong>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      {analysis.activitySamples.length > 0 ? (
-                        <div className="space-y-1">
-                          <p className="text-[11px] text-slate-300">
-                            บันทึกกิจกรรมล่าสุด: <span className="text-white font-medium">{analysis.activitySamples.join(", ")}</span>
-                          </p>
-                          <div className="flex justify-between items-center pt-1 border-t border-[#26334d]/60">
-                            <span className="text-slate-400">ความสม่ำเสมอกิจกรรม:</span>
-                            <strong className="text-indigo-300 font-mono">
-                              {Math.min(100, Math.round((analysis.activitiesCount / Math.max(1, analysis.daysElapsed)) * 100))}%
-                              <span className="text-xs font-normal text-slate-400 ml-1">
-                                ({analysis.activitiesCount} จาก {analysis.daysElapsed} วันที่ผ่านมา)
-                              </span>
-                            </strong>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="py-2 text-center text-slate-400 text-xs space-y-1">
-                          <p>ยังไม่มีบันทึกการออกกำลังกายหรือกิจกรรมในช่วงโปรเจกต์นี้</p>
-                          <p className="text-[10px] text-slate-500">
-                            สามารถบันทึกผ่านเมนู "ออกกำลังกาย" หรือ "จดบันทึกก้าวเดิน" ได้ทันที
-                          </p>
-                        </div>
-                      )}
-                    </>
-                  )}
+                {/* Main Step Stats Grid */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2.5 rounded-lg bg-[#111726] border border-[#26334d]">
+                    <div className="flex items-center justify-between text-[10px] text-slate-400">
+                      <span>ก้าวเดินเฉลี่ย</span>
+                      <span className="text-indigo-400 font-mono font-semibold">{goalProgressPct}% ของเป้า</span>
+                    </div>
+                    <div className="text-sm font-bold text-indigo-400 font-mono mt-0.5">
+                      {avgStepsPerDay.toLocaleString()} <span className="text-xs font-normal text-slate-400">ก้าว/วัน</span>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-1 mt-1.5 overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-indigo-500 to-emerald-400 h-1 rounded-full"
+                        style={{ width: `${goalProgressPct}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-[#111726] border border-[#26334d]">
+                    <div className="flex items-center justify-between text-[10px] text-slate-400">
+                      <span>วันที่เดินถึงเป้า ({targetDailySteps.toLocaleString()} ก้าว)</span>
+                      <span className="text-emerald-400 font-mono font-semibold">{stepCompliancePct}%</span>
+                    </div>
+                    <div className="text-sm font-bold text-emerald-400 font-mono mt-0.5">
+                      {daysHitGoal} <span className="text-xs font-normal text-slate-400">/ {daysElapsed} วัน</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">
+                      {daysHitGoal >= daysElapsed && daysElapsed > 0 ? "เดินถึงเป้าครบทุกวัน 🌟" : `บันทึกแล้ว ${daysWithSteps} วัน`}
+                    </span>
+                  </div>
                 </div>
+
+                <div className="flex justify-between items-center text-xs pt-1 border-t border-[#26334d]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">ก้าวเดินสะสมรวม:</span>
+                    <strong className="text-white font-mono">{totalSteps.toLocaleString()} ก้าว (~{totalDistanceKm} กม.)</strong>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-slate-400">🔥 เผาผลาญ:</span>
+                    <strong className="text-amber-400 font-mono">+{totalBurnedCalories.toLocaleString()} kcal</strong>
+                  </div>
+                </div>
+
+                {/* Quick Step Input Box & Button */}
+                <div className="p-2 rounded-lg bg-[#0e1424] border border-indigo-500/20 space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      type="number"
+                      placeholder="กรอกจำนวนก้าววันนี้ เช่น 8500"
+                      value={quickStepsInput}
+                      onChange={(e) => setQuickStepsInput(e.target.value === "" ? "" : Number(e.target.value))}
+                      className="bg-[#0b0f19] border-[#26334d] text-white text-xs h-8 font-mono flex-1"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={quickSaving || !quickStepsInput}
+                      onClick={() => handleQuickLogSteps(Number(quickStepsInput))}
+                      className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold h-8 px-3 shrink-0 shadow-sm"
+                    >
+                      {quickSaving ? "กำลังบันทึก..." : "+ กรอกก้าว"}
+                    </Button>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5">
+                    <div className="flex items-center gap-1">
+                      <span>ลัด:</span>
+                      {[6000, 8000, 10000, 12000].map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setQuickStepsInput(s)}
+                          className="px-1.5 py-0.5 rounded bg-[#111726] border border-[#26334d] text-slate-300 hover:text-white"
+                        >
+                          {s.toLocaleString()}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAddStepOpen(true)}
+                      className="text-indigo-400 hover:underline flex items-center gap-0.5"
+                    >
+                      <span>บันทึกย้อนหลัง / โน้ต</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Recent step entries snippet */}
+                {stepLogs.length > 0 && (
+                  <div className="text-[10px] text-slate-400 space-y-0.5 pt-0.5">
+                    <span className="text-slate-500 font-semibold block">บันทึกล่าสุด:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {stepLogs.slice(0, 4).map((s) => (
+                        <span
+                          key={s.id}
+                          className="px-2 py-0.5 rounded bg-[#111726] border border-[#26334d] text-slate-300 font-mono"
+                        >
+                          {s.date}: <strong className="text-indigo-300">{Number(s.steps).toLocaleString()}</strong> ก้าว{" "}
+                          {Number(s.steps) >= targetDailySteps ? "✅" : "⚠️"}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Question 3: จากเป้ากี่แคลอรี่ที่ต้องตัดทอน ผลลัพธ์คือยังไง? */}
@@ -604,6 +828,46 @@ export function ProjectReviewModal({
               />
             </div>
 
+            {/* Daily Step Target */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-slate-200 font-medium flex items-center gap-1.5">
+                  <Footprints className="h-3.5 w-3.5 text-indigo-400" />
+                  เป้าหมายก้าวเดินประจำวัน (Daily Step Target)
+                </Label>
+                <span className="text-[11px] text-indigo-400 font-mono font-bold">
+                  {formDailySteps.toLocaleString()} ก้าว/วัน
+                </span>
+              </div>
+              <Input
+                type="number"
+                min={1000}
+                max={50000}
+                step={500}
+                value={formDailySteps}
+                onChange={(e) => setFormDailySteps(Number(e.target.value))}
+                className="bg-[#0b0f19] border-[#26334d] text-white text-xs h-9 font-mono"
+                required
+              />
+              <div className="flex items-center gap-1.5 pt-0.5">
+                <span className="text-[10px] text-slate-400">เป้ายอดนิยม:</span>
+                {[5000, 8000, 10000, 12000, 15000].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setFormDailySteps(s)}
+                    className={`text-[10px] px-2 py-0.5 rounded transition-all ${
+                      formDailySteps === s
+                        ? "bg-indigo-600 text-white font-bold"
+                        : "bg-[#0b0f19] text-slate-400 border border-[#26334d] hover:text-white"
+                    }`}
+                  >
+                    {s.toLocaleString()} ก้าว
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Formula Preview Box */}
             <div className="p-3 rounded-xl bg-gradient-to-r from-[#0b1424] to-[#121c2e] border border-emerald-500/30 text-xs text-slate-300 space-y-1">
               <div className="flex justify-between font-medium">
@@ -697,6 +961,18 @@ export function ProjectReviewModal({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <AddStepModal
+        open={addStepOpen}
+        onOpenChange={setAddStepOpen}
+        defaultPerson={currentProject?.person === "ฝ่ายหญิง" ? "ฝ่ายหญิง" : "ฝ่ายชาย"}
+        defaultStepGoal={targetDailySteps}
+        onSaved={() => {
+          setStepRefreshCount((prev) => prev + 1)
+          setProjectsList(getProjects())
+          if (currentProject) onProjectUpdated(currentProject)
+        }}
+      />
     </Dialog>
   )
 }

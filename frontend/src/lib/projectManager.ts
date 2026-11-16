@@ -4,6 +4,7 @@ export interface FitnessProject {
   person: "ฝ่ายชาย" | "ฝ่ายหญิง" | "ทั้งคู่"
   targetFatLossKg: number
   targetDeficitKcal: number
+  targetDailySteps?: number // เป้าหมายก้าวเดินต่อวัน (เช่น 8,000 หรือ 10,000 ก้าว)
   startDate: string // YYYY-MM-DD
   deadlineDate: string // YYYY-MM-DD
   startWeight: number
@@ -23,6 +24,7 @@ export const DEFAULT_PROJECTS: FitnessProject[] = [
     person: "ฝ่ายชาย",
     targetFatLossKg: 10,
     targetDeficitKcal: 75000,
+    targetDailySteps: 8000,
     startDate: "2026-11-16",
     deadlineDate: "2026-12-31",
     startWeight: 100.0,
@@ -36,6 +38,7 @@ export const DEFAULT_PROJECTS: FitnessProject[] = [
     person: "ฝ่ายหญิง",
     targetFatLossKg: 5,
     targetDeficitKcal: 37500,
+    targetDailySteps: 8000,
     startDate: "2026-11-16",
     deadlineDate: "2026-12-31",
     startWeight: 65.0,
@@ -124,6 +127,17 @@ export function completeProject(id: string, reviewNotes?: string): void {
     }
     saveProjects(projects)
   }
+}
+
+export function updateProject(id: string, updates: Partial<FitnessProject>): FitnessProject | null {
+  const projects = getProjects()
+  const p = projects.find((item) => item.id === id)
+  if (p) {
+    Object.assign(p, updates)
+    saveProjects(projects)
+    return p
+  }
+  return null
 }
 
 export interface ProjectAnalysis {

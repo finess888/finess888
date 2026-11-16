@@ -28,6 +28,7 @@ import {
   Clock,
   Lightbulb,
   Activity,
+  Footprints,
 } from "lucide-react"
 import {
   AllCalorieSettings,
@@ -39,6 +40,7 @@ import {
   FitnessProject,
   analyzeProject,
 } from "@/lib/projectManager"
+import { getDailyStepLogs } from "@/lib/exerciseDatabase"
 import { CalorieSettingsModal } from "@/components/modals/CalorieSettingsModal"
 import { ProjectReviewModal } from "@/components/modals/ProjectReviewModal"
 import { formatThaiDate } from "@/lib/utils"
@@ -76,6 +78,7 @@ interface DashboardViewProps {
   onSelectPerson: (person: string) => void
   onOpenAddMeal: () => void
   onOpenAddWeight: () => void
+  onOpenAddStep?: () => void
   onToggleMealStatus: (id: string, currentStatus: string) => void
   onNavigateToMealPlan: () => void
 }
@@ -88,6 +91,7 @@ export function DashboardView({
   onSelectPerson,
   onOpenAddMeal,
   onOpenAddWeight,
+  onOpenAddStep,
   onToggleMealStatus,
   onNavigateToMealPlan,
 }: DashboardViewProps) {
@@ -505,7 +509,7 @@ export function DashboardView({
             </button>
           </div>
 
-          {/* Action Buttons: Add Weight & Add Meal */}
+          {/* Action Buttons: Add Weight, Add Step & Add Meal */}
           <Button
             onClick={onOpenAddWeight}
             className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1.5 h-9 px-3 shadow-md shadow-indigo-950"
@@ -513,6 +517,16 @@ export function DashboardView({
             <Scale className="h-4 w-4" />
             + บันทึกน้ำหนัก
           </Button>
+
+          {onOpenAddStep && (
+            <Button
+              onClick={onOpenAddStep}
+              className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium flex items-center gap-1.5 h-9 px-3 shadow-md shadow-purple-950"
+            >
+              <Footprints className="h-4 w-4" />
+              + บันทึกก้าวเดิน
+            </Button>
+          )}
 
           <Button
             onClick={onOpenAddMeal}
@@ -918,16 +932,36 @@ export function DashboardView({
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Activity className="h-4 w-4 text-emerald-400 shrink-0" />
-              <div>
-                <span className="text-slate-400 block text-[11px]">ออกกำลังกายเป็นยังไง?</span>
-                <strong className="text-indigo-300">
-                  {projectAnalysis && projectAnalysis.activitiesCount > 0
-                    ? `บันทึกกิจกรรม ${projectAnalysis.activitiesCount} วัน`
-                    : "ยังไม่มีบันทึกกิจกรรม"}
-                </strong>
+            <div className="flex items-center justify-between sm:justify-start gap-2">
+              <div className="flex items-center gap-2">
+                <Footprints className="h-4 w-4 text-indigo-400 shrink-0" />
+                <div>
+                  <span className="text-slate-400 block text-[11px]">
+                    ก้าวเดิน (เป้า {(activeProject?.targetDailySteps || (isFemale ? femaleSettings.stepGoal : maleSettings.stepGoal) || 8000).toLocaleString()} ก้าว/วัน)
+                  </span>
+                  <strong className="text-indigo-300 font-mono">
+                    {(() => {
+                      const allStepLogs = getDailyStepLogs()
+                      const todayStr = new Date().toLocaleDateString("en-CA")
+                      const target = activeProject?.targetDailySteps || (isFemale ? femaleSettings.stepGoal : maleSettings.stepGoal) || 8000
+                      const pLog = allStepLogs.find((s) => s.date === todayStr && (isAll || s.person === (isFemale ? "ฝ่ายหญิง" : "ฝ่ายชาย")))
+                      if (pLog) {
+                        return `${Number(pLog.steps).toLocaleString()} ก้าว ${Number(pLog.steps) >= target ? "✅ ถึงเป้า" : `(ขาดอีก ${(target - Number(pLog.steps)).toLocaleString()})`}`
+                      }
+                      return `วันนี้ยังไม่บันทึก`
+                    })()}
+                  </strong>
+                </div>
               </div>
+              {onOpenAddStep && (
+                <button
+                  type="button"
+                  onClick={onOpenAddStep}
+                  className="text-[10px] bg-indigo-950/60 text-indigo-300 hover:bg-indigo-600 hover:text-white px-2 py-0.5 rounded border border-indigo-500/40 font-semibold transition-all shrink-0 ml-1"
+                >
+                  + กรอกก้าว
+                </button>
+              )}
             </div>
 
             <div className="flex items-center justify-between sm:justify-end gap-2">

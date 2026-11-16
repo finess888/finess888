@@ -4,6 +4,7 @@ export interface PersonCalorieSettings {
   protein: number     // เป้าหมายโปรตีน (g)
   carbs: number       // เป้าหมายคาร์บ (g)
   fat: number         // เป้าหมายไขมัน (g)
+  stepGoal?: number   // เป้าหมายก้าวเดินต่อวัน (ก้าว)
 }
 
 export interface AllCalorieSettings {
@@ -18,6 +19,7 @@ export const DEFAULT_CALORIE_SETTINGS: AllCalorieSettings = {
     protein: 120,
     carbs: 210,
     fat: 60,
+    stepGoal: 8000,
   },
   female: {
     maintenance: 1700,
@@ -25,6 +27,7 @@ export const DEFAULT_CALORIE_SETTINGS: AllCalorieSettings = {
     protein: 104,
     carbs: 130,
     fat: 40,
+    stepGoal: 8000,
   },
 }
 

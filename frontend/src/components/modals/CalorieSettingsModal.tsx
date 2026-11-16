@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Flame, Target, Utensils, Sparkles, RefreshCcw } from "lucide-react"
+import { Flame, Target, Utensils, Sparkles, RefreshCcw, Footprints } from "lucide-react"
 import {
   AllCalorieSettings,
   PersonCalorieSettings,
@@ -278,6 +278,45 @@ export function CalorieSettingsModal({
                   className="bg-[#0b0f19] border-[#26334d] text-white text-xs text-center h-8"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* 5. Daily Step Target */}
+          <div className="space-y-1.5 pt-1">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
+                <Footprints className="h-3.5 w-3.5 text-indigo-400" />
+                เป้าหมายก้าวเดินต่อวัน (Daily Steps Goal)
+              </Label>
+              <span className="text-[11px] text-indigo-400 font-mono font-bold">
+                {(currentPersonSettings.stepGoal || 8000).toLocaleString()} ก้าว
+              </span>
+            </div>
+            <Input
+              type="number"
+              min={1000}
+              max={50000}
+              step={500}
+              value={currentPersonSettings.stepGoal || 8000}
+              onChange={(e) => updateCurrentPerson({ stepGoal: Number(e.target.value) || 8000 })}
+              className="bg-[#0b0f19] border-[#26334d] text-white text-xs h-8 font-mono"
+            />
+            <div className="flex items-center gap-1.5 pt-0.5">
+              <span className="text-[10px] text-slate-400">เลือกลัด:</span>
+              {[5000, 8000, 10000, 12000, 15000].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => updateCurrentPerson({ stepGoal: s })}
+                  className={`text-[10px] px-2 py-0.5 rounded transition-all ${
+                    (currentPersonSettings.stepGoal || 8000) === s
+                      ? "bg-indigo-600 text-white font-bold"
+                      : "bg-[#0b0f19] text-slate-400 border border-[#26334d] hover:text-white"
+                  }`}
+                >
+                  {s.toLocaleString()}
+                </button>
+              ))}
             </div>
           </div>
         </div>
