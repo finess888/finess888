@@ -44,7 +44,7 @@ export function AddMealModal({
   const [mealType, setMealType] = React.useState("01. มื้อเช้า")
   const [selectedFoodId, setSelectedFoodId] = React.useState("")
   const [foodName, setFoodName] = React.useState("")
-  const [servings, setServings] = React.useState<number | "">(1)
+  const [servings, setServings] = React.useState<number | string>(1)
 
   // Base nutrients per 1 serving
   const [baseCalories, setBaseCalories] = React.useState<number | "">(350)
@@ -53,16 +53,16 @@ export function AddMealModal({
   const [baseFat, setBaseFat] = React.useState<number | "">(10)
 
   // Total scaled nutrients for this meal entry (base * servings)
-  const [calories, setCalories] = React.useState<number | "">(350)
-  const [protein, setProtein] = React.useState<number | "">(25)
-  const [carbs, setCarbs] = React.useState<number | "">(40)
-  const [fat, setFat] = React.useState<number | "">(10)
+  const [calories, setCalories] = React.useState<number | string>(350)
+  const [protein, setProtein] = React.useState<number | string>(25)
+  const [carbs, setCarbs] = React.useState<number | string>(40)
+  const [fat, setFat] = React.useState<number | string>(10)
 
   const [notes, setNotes] = React.useState("")
   const [saving, setSaving] = React.useState(false)
 
   // Apply food item data
-  const applyFoodItem = React.useCallback((f: any, currentServings: number | "") => {
+  const applyFoodItem = React.useCallback((f: any, currentServings: number | string) => {
     const bCal = parseFloat(String(f.calories || f.Calories || 0)) || 0
     const bProt = parseFloat(String(f.protein || f.Protein || 0)) || 0
     const bCarb = parseFloat(String(f.carbs || f.Carbs || 0)) || 0
@@ -73,11 +73,11 @@ export function AddMealModal({
     setBaseCarbs(bCarb)
     setBaseFat(bFat)
 
-    const serv = typeof currentServings === "number" && currentServings > 0 ? currentServings : 1
-    setCalories(Math.round(bCal * serv))
-    setProtein(Number((bProt * serv).toFixed(1)))
-    setCarbs(Number((bCarb * serv).toFixed(1)))
-    setFat(Number((bFat * serv).toFixed(1)))
+    const servNum = typeof currentServings === "number" ? currentServings : (parseFloat(String(currentServings)) || 1)
+    setCalories(Math.round(bCal * servNum))
+    setProtein(Number((bProt * servNum).toFixed(1)))
+    setCarbs(Number((bCarb * servNum).toFixed(1)))
+    setFat(Number((bFat * servNum).toFixed(1)))
 
     setFoodName(f.name || f.Name || "")
     if (f.servingSize) {
@@ -116,54 +116,63 @@ export function AddMealModal({
   }
 
   // Handle changing servings (multiplies all macros by servings)
-  const handleServingsChange = (newServings: number | "") => {
+  const handleServingsChange = (newServings: number | string) => {
     setServings(newServings)
-    if (typeof newServings === "number" && newServings > 0) {
-      const currentServ = typeof servings === "number" && servings > 0 ? servings : 1
-      const bCal = baseCalories !== "" ? Number(baseCalories) : (calories !== "" ? Number(calories) / currentServ : 0)
-      const bProt = baseProtein !== "" ? Number(baseProtein) : (protein !== "" ? Number(protein) / currentServ : 0)
-      const bCarb = baseCarbs !== "" ? Number(baseCarbs) : (carbs !== "" ? Number(carbs) / currentServ : 0)
-      const bFat = baseFat !== "" ? Number(baseFat) : (fat !== "" ? Number(fat) / currentServ : 0)
+    const servNum = typeof newServings === "number" ? newServings : parseFloat(String(newServings))
+    if (!isNaN(servNum) && servNum > 0) {
+      const curServ = typeof servings === "number" ? servings : (parseFloat(String(servings)) || 1)
+      const bCal = baseCalories !== "" ? Number(baseCalories) : (calories !== "" ? Number(calories) / curServ : 0)
+      const bProt = baseProtein !== "" ? Number(baseProtein) : (protein !== "" ? Number(protein) / curServ : 0)
+      const bCarb = baseCarbs !== "" ? Number(baseCarbs) : (carbs !== "" ? Number(carbs) / curServ : 0)
+      const bFat = baseFat !== "" ? Number(baseFat) : (fat !== "" ? Number(fat) / curServ : 0)
 
-      setCalories(Math.round(bCal * newServings))
-      setProtein(Number((bProt * newServings).toFixed(1)))
-      setCarbs(Number((bCarb * newServings).toFixed(1)))
-      setFat(Number((bFat * newServings).toFixed(1)))
+      setCalories(Math.round(bCal * servNum))
+      setProtein(Number((bProt * servNum).toFixed(1)))
+      setCarbs(Number((bCarb * servNum).toFixed(1)))
+      setFat(Number((bFat * servNum).toFixed(1)))
     }
   }
 
   // Direct manual edits to total nutrients update base accordingly
-  const handleCaloriesChange = (val: number | "") => {
+  const handleCaloriesChange = (val: number | string) => {
     setCalories(val)
-    if (typeof val === "number" && typeof servings === "number" && servings > 0) {
-      setBaseCalories(Math.round(val / servings))
+    const num = Number(val)
+    const servNum = typeof servings === "number" ? servings : (parseFloat(String(servings)) || 1)
+    if (!isNaN(num) && servNum > 0) {
+      setBaseCalories(Math.round(num / servNum))
     } else if (val === "") {
       setBaseCalories("")
     }
   }
 
-  const handleProteinChange = (val: number | "") => {
+  const handleProteinChange = (val: number | string) => {
     setProtein(val)
-    if (typeof val === "number" && typeof servings === "number" && servings > 0) {
-      setBaseProtein(Number((val / servings).toFixed(1)))
+    const num = Number(val)
+    const servNum = typeof servings === "number" ? servings : (parseFloat(String(servings)) || 1)
+    if (!isNaN(num) && servNum > 0) {
+      setBaseProtein(Number((num / servNum).toFixed(1)))
     } else if (val === "") {
       setBaseProtein("")
     }
   }
 
-  const handleCarbsChange = (val: number | "") => {
+  const handleCarbsChange = (val: number | string) => {
     setCarbs(val)
-    if (typeof val === "number" && typeof servings === "number" && servings > 0) {
-      setBaseCarbs(Number((val / servings).toFixed(1)))
+    const num = Number(val)
+    const servNum = typeof servings === "number" ? servings : (parseFloat(String(servings)) || 1)
+    if (!isNaN(num) && servNum > 0) {
+      setBaseCarbs(Number((num / servNum).toFixed(1)))
     } else if (val === "") {
       setBaseCarbs("")
     }
   }
 
-  const handleFatChange = (val: number | "") => {
+  const handleFatChange = (val: number | string) => {
     setFat(val)
-    if (typeof val === "number" && typeof servings === "number" && servings > 0) {
-      setBaseFat(Number((val / servings).toFixed(1)))
+    const num = Number(val)
+    const servNum = typeof servings === "number" ? servings : (parseFloat(String(servings)) || 1)
+    if (!isNaN(num) && servNum > 0) {
+      setBaseFat(Number((num / servNum).toFixed(1)))
     } else if (val === "") {
       setBaseFat("")
     }
@@ -176,6 +185,12 @@ export function AddMealModal({
       return
     }
 
+    const finalServings = typeof servings === "number" ? servings : (parseFloat(String(servings)) || 1)
+    const finalCalories = Number(calories) || 0
+    const finalProtein = Number(protein) || 0
+    const finalCarbs = Number(carbs) || 0
+    const finalFat = Number(fat) || 0
+
     setSaving(true)
     try {
       await onSave({
@@ -183,16 +198,16 @@ export function AddMealModal({
         person,
         mealType,
         foodName: foodName.trim(),
-        servings: Number(servings) || 1,
-        calories: Number(calories) || 0,
-        protein: Number(protein) || 0,
-        carbs: Number(carbs) || 0,
-        fat: Number(fat) || 0,
+        servings: finalServings,
+        calories: finalCalories,
+        protein: finalProtein,
+        carbs: finalCarbs,
+        fat: finalFat,
         notes: notes.trim(),
       })
 
       toast.success("บันทึกมื้ออาหารลงใน Google Sheets สำเร็จ!", {
-        description: `${foodName} (${servings || 1} เสิร์ฟ) • ${calories} kcal (P: ${protein}g, C: ${carbs}g, F: ${fat}g)`
+        description: `${foodName} (${finalServings} เสิร์ฟ) • ${finalCalories} kcal (P: ${finalProtein}g, C: ${finalCarbs}g, F: ${finalFat}g)`
       })
       onOpenChange(false)
       setSelectedFoodId("")
@@ -214,7 +229,7 @@ export function AddMealModal({
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} noValidate className="space-y-4 py-2">
+        <form onSubmit={handleSubmit} noValidate autoComplete="off" className="space-y-4 py-2">
           {/* Person Selector */}
           <div className="space-y-1.5">
             <Label className="text-slate-300 text-xs">ผู้รับประทาน</Label>
@@ -319,8 +334,8 @@ export function AddMealModal({
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const current = typeof servings === "number" ? servings : 1
-                    const nextVal = Math.max(0.25, Math.round((current - 0.5) * 100) / 100)
+                    const current = typeof servings === "number" ? servings : (parseFloat(String(servings)) || 1)
+                    const nextVal = Math.max(0.5, Math.round((current - 0.5) * 100) / 100)
                     handleServingsChange(nextVal)
                   }}
                   className="h-9 w-8 p-0 border-[#26334d] bg-[#0b0f19] text-slate-300 hover:text-white hover:bg-slate-800 shrink-0"
@@ -328,13 +343,23 @@ export function AddMealModal({
                   <Minus className="h-3.5 w-3.5" />
                 </Button>
                 <Input
-                  type="number"
-                  step="any"
-                  min="0.01"
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  name="meal_servings"
                   value={servings}
                   onChange={(e) => {
-                    const val = e.target.value === "" ? "" : Number(e.target.value)
-                    handleServingsChange(val)
+                    const val = e.target.value
+                    if (val === "" || /^\d*\.?\d*$/.test(val)) {
+                      handleServingsChange(val)
+                    }
+                  }}
+                  onBlur={() => {
+                    if (servings === "" || Number(servings) <= 0) {
+                      handleServingsChange(1)
+                    }
                   }}
                   className="bg-[#0b0f19] border-[#26334d] text-white h-9 text-sm text-center font-bold font-mono"
                 />
@@ -343,7 +368,7 @@ export function AddMealModal({
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const current = typeof servings === "number" ? servings : 1
+                    const current = typeof servings === "number" ? servings : (parseFloat(String(servings)) || 1)
                     const nextVal = Math.round((current + 0.5) * 100) / 100
                     handleServingsChange(nextVal)
                   }}
@@ -361,7 +386,7 @@ export function AddMealModal({
                     type="button"
                     onClick={() => handleServingsChange(val)}
                     className={`flex-1 py-1 text-[10px] font-semibold rounded-md transition-all ${
-                      servings === val
+                      Number(servings) === val
                         ? "bg-emerald-600 text-white shadow-sm font-bold"
                         : "bg-[#0b0f19] text-slate-400 hover:text-white border border-[#26334d]/60"
                     }`}
@@ -422,44 +447,68 @@ export function AddMealModal({
             <div className="space-y-1.5">
               <Label className="text-slate-300 text-xs">แคลอรี่รวม (kcal)</Label>
               <Input
-                type="number"
-                step="any"
-                min="0"
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                name="meal_calories"
                 value={calories}
-                onChange={(e) => handleCaloriesChange(e.target.value === "" ? "" : Number(e.target.value))}
+                onChange={(e) => {
+                  const val = e.target.value
+                  if (val === "" || /^\d*$/.test(val)) {
+                    handleCaloriesChange(val === "" ? "" : Number(val))
+                  }
+                }}
                 className="bg-[#0b0f19] border-[#26334d] text-white h-9 text-sm"
               />
             </div>
             <div className="space-y-1.5">
               <Label className="text-emerald-400 text-xs">โปรตีนรวม (g)</Label>
               <Input
-                type="number"
-                step="any"
-                min="0"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                name="meal_protein"
                 value={protein}
-                onChange={(e) => handleProteinChange(e.target.value === "" ? "" : Number(e.target.value))}
+                onChange={(e) => {
+                  const val = e.target.value
+                  if (val === "" || /^\d*\.?\d*$/.test(val)) {
+                    handleProteinChange(val === "" ? "" : val)
+                  }
+                }}
                 className="bg-[#0b0f19] border-[#26334d] text-white h-9 text-sm"
               />
             </div>
             <div className="space-y-1.5">
               <Label className="text-amber-400 text-xs">คาร์บรวม (g)</Label>
               <Input
-                type="number"
-                step="any"
-                min="0"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                name="meal_carbs"
                 value={carbs}
-                onChange={(e) => handleCarbsChange(e.target.value === "" ? "" : Number(e.target.value))}
+                onChange={(e) => {
+                  const val = e.target.value
+                  if (val === "" || /^\d*\.?\d*$/.test(val)) {
+                    handleCarbsChange(val === "" ? "" : val)
+                  }
+                }}
                 className="bg-[#0b0f19] border-[#26334d] text-white h-9 text-sm"
               />
             </div>
             <div className="space-y-1.5">
               <Label className="text-rose-400 text-xs">ไขมันรวม (g)</Label>
               <Input
-                type="number"
-                step="any"
-                min="0"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                name="meal_fat"
                 value={fat}
-                onChange={(e) => handleFatChange(e.target.value === "" ? "" : Number(e.target.value))}
+                onChange={(e) => {
+                  const val = e.target.value
+                  if (val === "" || /^\d*\.?\d*$/.test(val)) {
+                    handleFatChange(val === "" ? "" : val)
+                  }
+                }}
                 className="bg-[#0b0f19] border-[#26334d] text-white h-9 text-sm"
               />
             </div>

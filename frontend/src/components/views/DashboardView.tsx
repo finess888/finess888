@@ -43,6 +43,7 @@ import {
 import { getDailyStepLogs } from "@/lib/exerciseDatabase"
 import { CalorieSettingsModal } from "@/components/modals/CalorieSettingsModal"
 import { ProjectReviewModal } from "@/components/modals/ProjectReviewModal"
+import { SetStepGoalModal } from "@/components/modals/SetStepGoalModal"
 import { formatThaiDate } from "@/lib/utils"
 import { Doughnut, Bar } from "react-chartjs-2"
 import {
@@ -142,6 +143,7 @@ export function DashboardView({
 
   // Weight Loss Project & Deadline state
   const [projectModalOpen, setProjectModalOpen] = React.useState(false)
+  const [stepGoalModalOpen, setStepGoalModalOpen] = React.useState(false)
   const [activeProject, setActiveProject] = React.useState<FitnessProject | null>(() =>
     getActiveProject(isFemale ? "ฝ่ายหญิง" : "ฝ่ายชาย")
   )
@@ -936,9 +938,19 @@ export function DashboardView({
               <div className="flex items-center gap-2">
                 <Footprints className="h-4 w-4 text-indigo-400 shrink-0" />
                 <div>
-                  <span className="text-slate-400 block text-[11px]">
-                    ก้าวเดิน (เป้า {(activeProject?.targetDailySteps || (isFemale ? femaleSettings.stepGoal : maleSettings.stepGoal) || 8000).toLocaleString()} ก้าว/วัน)
-                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-slate-400 text-[11px]">
+                      ก้าวเดิน (เป้า {(activeProject?.targetDailySteps || (isFemale ? femaleSettings.stepGoal : maleSettings.stepGoal) || 8000).toLocaleString()} ก้าว/วัน)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setStepGoalModalOpen(true)}
+                      className="text-[10px] text-amber-400 hover:text-amber-300 font-semibold underline decoration-dashed flex items-center gap-0.5 cursor-pointer"
+                      title="คลิกเพื่อเปลี่ยนเป้าหมายก้าวเดินต่อวัน"
+                    >
+                      <span>🎯 ตั้งเป้า</span>
+                    </button>
+                  </div>
                   <strong className="text-indigo-300 font-mono">
                     {(() => {
                       const allStepLogs = getDailyStepLogs()
@@ -953,15 +965,24 @@ export function DashboardView({
                   </strong>
                 </div>
               </div>
-              {onOpenAddStep && (
+              <div className="flex items-center gap-1 shrink-0 ml-1">
                 <button
                   type="button"
-                  onClick={onOpenAddStep}
-                  className="text-[10px] bg-indigo-950/60 text-indigo-300 hover:bg-indigo-600 hover:text-white px-2 py-0.5 rounded border border-indigo-500/40 font-semibold transition-all shrink-0 ml-1"
+                  onClick={() => setStepGoalModalOpen(true)}
+                  className="text-[10px] bg-amber-950/60 text-amber-300 hover:bg-amber-600 hover:text-white px-2 py-0.5 rounded border border-amber-500/40 font-semibold transition-all"
                 >
-                  + กรอกก้าว
+                  🎯 ตั้งเป้า
                 </button>
-              )}
+                {onOpenAddStep && (
+                  <button
+                    type="button"
+                    onClick={onOpenAddStep}
+                    className="text-[10px] bg-indigo-950/60 text-indigo-300 hover:bg-indigo-600 hover:text-white px-2 py-0.5 rounded border border-indigo-500/40 font-semibold transition-all"
+                  >
+                    + กรอกก้าว
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center justify-between sm:justify-end gap-2">
@@ -1325,6 +1346,18 @@ export function DashboardView({
         maintenanceCalories={MAINTENANCE_CALORIES}
         targetIntakeCalories={TARGET_CALORIES}
         onProjectUpdated={(newP) => setActiveProject(newP)}
+      />
+
+      {/* Set Step Goal Modal */}
+      <SetStepGoalModal
+        open={stepGoalModalOpen}
+        onOpenChange={setStepGoalModalOpen}
+        currentPerson={isFemale ? "ฝ่ายหญิง" : "ฝ่ายชาย"}
+        currentGoal={activeProject?.targetDailySteps || (isFemale ? femaleSettings.stepGoal : maleSettings.stepGoal) || 8000}
+        onSaved={(_newGoal) => {
+          setCalorieSettings(getCalorieSettings())
+          setActiveProject(getActiveProject(isFemale ? "ฝ่ายหญิง" : "ฝ่ายชาย"))
+        }}
       />
     </div>
   )

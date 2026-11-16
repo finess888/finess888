@@ -814,16 +814,24 @@ function handleSaveCalorieSettings(ss, payload) {
     if (dashSheet && dashSheet.getLastRow() >= 6) {
       const maleProtein = payload.male ? payload.male.protein : 120;
       const maleMaintenance = payload.male ? payload.male.maintenance : 2000;
+      const maleStep = (payload.male && payload.male.stepGoal) ? payload.male.stepGoal : 8000;
       const femaleProtein = payload.female ? payload.female.protein : 104;
       const femaleMaintenance = payload.female ? payload.female.maintenance : 1700;
+      const femaleStep = (payload.female && payload.female.stepGoal) ? payload.female.stepGoal : 8000;
 
       // Update row 6 (header titles)
-      dashSheet.getRange(6, 2).setValue('🏋️‍♂️ สรุปโภชนาการรายวัน: ฝ่ายชาย (เป้า ' + maleMaintenance + ' kcal | โปรตีน ' + maleProtein + 'g)');
-      dashSheet.getRange(6, 8).setValue('🧘‍♀️ สรุปโภชนาการรายวัน: ฝ่ายหญิง (เป้า ' + femaleMaintenance + ' kcal | โปรตีน ' + femaleProtein + 'g)');
+      dashSheet.getRange(6, 2).setValue('🏋️‍♂️ สรุปโภชนาการรายวัน: ฝ่ายชาย (เป้า ' + maleMaintenance + ' kcal | โปรตีน ' + maleProtein + 'g | ' + Number(maleStep).toLocaleString() + ' ก้าว)');
+      dashSheet.getRange(6, 8).setValue('🧘‍♀️ สรุปโภชนาการรายวัน: ฝ่ายหญิง (เป้า ' + femaleMaintenance + ' kcal | โปรตีน ' + femaleProtein + 'g | ' + Number(femaleStep).toLocaleString() + ' ก้าว)');
 
       // Update row 9 (target badges)
       dashSheet.getRange(9, 3).setValue('เป้า ' + maleProtein + 'g');
       dashSheet.getRange(9, 9).setValue('เป้า ' + femaleProtein + 'g');
+
+      // Update row 33-34 (nutrition & step guidelines)
+      if (dashSheet.getLastRow() >= 34) {
+        dashSheet.getRange(33, 1).setValue('• ฝ่ายชาย: ดื่มน้ำ 3.0 - 3.5 ลิตร/วัน | เดินอย่างน้อย ' + Number(maleStep).toLocaleString() + ' ก้าว | ชานมหวานปกติเฉพาะวันพักผ่อน (Rest Day)');
+        dashSheet.getRange(34, 1).setValue('• ฝ่ายหญิง: ดื่มน้ำ 2.0 - 2.5 ลิตร/วัน | เดินอย่างน้อย ' + Number(femaleStep).toLocaleString() + ' ก้าว | ชานมหวาน 30% ไม่เกิน 2-3 แก้ว/สัปดาห์');
+      }
     }
   } catch (err) {
     Logger.log('Could not update sheet C: ' + err);
