@@ -252,12 +252,12 @@ export function SettingsView({ onLogout }: SettingsViewProps) {
               </div>
             </div>
             <a
-              href="https://github.com/finess888/finess888/settings"
+              href="https://github.com/finess888/finess888.github.io"
               target="_blank"
               rel="noopener noreferrer"
             >
               <Button size="sm" variant="outline" className="border-[#26334d] text-xs flex items-center gap-1">
-                เปิด GitHub Settings <ExternalLink className="h-3 w-3" />
+                เปิด GitHub Repo <ExternalLink className="h-3 w-3" />
               </Button>
             </a>
           </div>
@@ -267,7 +267,7 @@ export function SettingsView({ onLogout }: SettingsViewProps) {
       {/* System info */}
       <div className="flex items-center justify-between p-4 rounded-xl bg-slate-900 border border-[#26334d] text-xs text-slate-400">
         <div>
-          <span>เวอร์ชันระบบ: 1.0.0 • สแตก: React 18, Vite 6, Tailwind 4, Google Apps Script</span>
+          <span>เวอร์ชันระบบ: 1.0.0 • finess888.github.io • สแตก: React 18, Vite 6, Tailwind 4, Google Apps Script</span>
         </div>
         <Button
           onClick={onLogout}

@@ -276,7 +276,7 @@ export default function App() {
             </a>
 
             <div className="text-[10px] text-slate-500 px-2">
-              GitHub Pages • finess888/finess888
+              GitHub Pages • finess888.github.io
             </div>
           </div>
         </aside>
