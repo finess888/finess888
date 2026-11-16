@@ -21,6 +21,8 @@ import { AddWeightModal } from "@/components/modals/AddWeightModal"
 import { AddWorkoutModal } from "@/components/modals/AddWorkoutModal"
 import { AddStepModal } from "@/components/modals/AddStepModal"
 import { ExerciseItem } from "@/lib/exerciseDatabase"
+import { saveCalorieSettings } from "@/lib/calorieSettings"
+import { saveProjects } from "@/lib/projectManager"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -114,13 +116,25 @@ export default function App() {
   } = useQuery({
     queryKey: ["initialData", passcode],
     queryFn: async () => {
-      return await callGasApi<{
+      const data = await callGasApi<{
         spreadsheetName: string
         meals: any[]
         foods: any[]
         healthLogs: any[]
         rawSheets: any[]
+        calorieSettings?: any
+        projects?: any[]
       }>("GET_INITIAL_DATA")
+
+      // Sync cloud settings and projects across all devices
+      if (data?.calorieSettings) {
+        saveCalorieSettings(data.calorieSettings)
+      }
+      if (data?.projects && Array.isArray(data.projects)) {
+        saveProjects(data.projects)
+      }
+
+      return data
     },
     enabled: !!passcode,
     retry: 1,

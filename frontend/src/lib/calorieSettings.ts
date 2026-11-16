@@ -15,7 +15,7 @@ export const DEFAULT_CALORIE_SETTINGS: AllCalorieSettings = {
   male: {
     maintenance: 2000,
     deficit: 300,
-    protein: 160,
+    protein: 120,
     carbs: 210,
     fat: 60,
   },

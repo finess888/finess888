@@ -101,14 +101,14 @@ export function DashboardView({
 
   React.useEffect(() => {
     setCalorieSettings(getCalorieSettings())
-  }, [selectedPerson])
+  }, [selectedPerson, meals, healthLogs])
 
   // Male Base Settings
   const maleSettings = calorieSettings.male
   const maleMaintenance = maleSettings.maintenance || 2000
   const maleDeficitTarget = maleSettings.deficit || 300
   const maleTargetIntake = getIntakeTarget(maleSettings) // 2000 - 300 = 1700
-  const maleTargetProtein = maleSettings.protein || 160
+  const maleTargetProtein = maleSettings.protein !== undefined ? maleSettings.protein : 120
   const maleTargetCarbs = maleSettings.carbs || 210
   const maleTargetFat = maleSettings.fat || 60
   const maleStartWeight = 100.0
@@ -119,7 +119,7 @@ export function DashboardView({
   const femaleMaintenance = femaleSettings.maintenance || 1700
   const femaleDeficitTarget = femaleSettings.deficit || 300
   const femaleTargetIntake = getIntakeTarget(femaleSettings) // 1700 - 300 = 1400
-  const femaleTargetProtein = femaleSettings.protein || 104
+  const femaleTargetProtein = femaleSettings.protein !== undefined ? femaleSettings.protein : 104
   const femaleTargetCarbs = femaleSettings.carbs || 130
   const femaleTargetFat = femaleSettings.fat || 40
   const femaleStartWeight = 65.0
@@ -144,7 +144,7 @@ export function DashboardView({
 
   React.useEffect(() => {
     setActiveProject(getActiveProject(isFemale ? "ฝ่ายหญิง" : "ฝ่ายชาย"))
-  }, [isFemale, selectedPerson])
+  }, [isFemale, selectedPerson, meals, healthLogs])
 
   // 1. Interactive Fat Loss Goal (User can customize, default 10 kg)
   const storageKey = isFemale ? "finess_fatloss_target_female" : "finess_fatloss_target_male"

@@ -20,6 +20,7 @@ import {
   completeProject,
   analyzeProject,
 } from "@/lib/projectManager"
+import { callGasApi } from "@/api/gasClient"
 import {
   getWorkoutLogs,
   getDailyStepLogs,
@@ -163,6 +164,7 @@ export function ProjectReviewModal({
     setSelectedProjectId(newProj.id)
     setActiveTab("review")
     onProjectUpdated(newProj)
+    callGasApi("SAVE_PROJECTS", updated).catch(() => {})
     toast.success(`สร้างโปรเจกต์ "${newProj.title}" สำเร็จ!`, {
       description: `เป้าหมายลด ${newProj.targetFatLossKg} กก. (ตัดทอน ${newProj.targetDeficitKcal.toLocaleString()} kcal) เดดไลน์ ${newProj.deadlineDate}`,
     })
@@ -173,6 +175,7 @@ export function ProjectReviewModal({
     completeProject(currentProject.id, reviewNoteInput.trim() || analysis?.evaluationSummary)
     const updated = getProjects()
     setProjectsList(updated)
+    callGasApi("SAVE_PROJECTS", updated).catch(() => {})
     toast.success(`ปิดสรุปโปรเจกต์ "${currentProject.title}" เรียบร้อยแล้ว!`, {
       description: "ข้อมูลผลสัมฤทธิ์และบทเรียนถูกจัดเก็บในประวัติเรียบร้อย สามารถสร้างโปรเจกต์ใหม่ได้ทันที",
     })

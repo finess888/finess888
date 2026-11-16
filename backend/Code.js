@@ -138,6 +138,14 @@ function doPost(e) {
         result = handleAddWorkoutLog(ss, payload);
         break;
       }
+      case 'SAVE_CALORIE_SETTINGS': {
+        result = handleSaveCalorieSettings(ss, payload);
+        break;
+      }
+      case 'SAVE_PROJECTS': {
+        result = handleSaveProjects(ss, payload);
+        break;
+      }
       case 'SAVE_SETTINGS': {
         if (payload.newPasscode) {
           PropertiesService.getScriptProperties().setProperty('APP_PASSCODE', String(payload.newPasscode).trim());
@@ -265,15 +273,53 @@ function handleGetInitialData(ss) {
     };
   });
 
+  // 4. Calorie Settings & Targets
+  let calorieSettings = null;
+  const rawCalorieSettings = PropertiesService.getScriptProperties().getProperty('CALORIE_SETTINGS');
+  if (rawCalorieSettings) {
+    try {
+      calorieSettings = JSON.parse(rawCalorieSettings);
+    } catch (e) {}
+  }
+  if (!calorieSettings) {
+    calorieSettings = {
+      male: { maintenance: 2000, deficit: 300, protein: 120, carbs: 210, fat: 60 },
+      female: { maintenance: 1700, deficit: 300, protein: 104, carbs: 130, fat: 40 }
+    };
+  }
+
+  // 5. Projects
+  let projects = null;
+  const rawProjects = PropertiesService.getScriptProperties().getProperty('PROJECTS_LIST');
+  if (rawProjects) {
+    try {
+      projects = JSON.parse(rawProjects);
+    } catch (e) {}
+  }
+
   return {
     spreadsheetName: ss.getName(),
     foods: foods,
     meals: meals,
     healthLogs: healthLogs,
     rawSheets: rawSheets,
+    calorieSettings: calorieSettings,
+    projects: projects,
     targets: {
-      male: { calories: 2000, protein: 160, carbs: 210, fat: 60, targetWeight: 70 },
-      female: { calories: 1400, protein: 104, carbs: 130, fat: 40, targetWeight: 50 }
+      male: {
+        calories: calorieSettings.male ? calorieSettings.male.maintenance : 2000,
+        protein: calorieSettings.male ? calorieSettings.male.protein : 120,
+        carbs: calorieSettings.male ? calorieSettings.male.carbs : 210,
+        fat: calorieSettings.male ? calorieSettings.male.fat : 60,
+        targetWeight: 70
+      },
+      female: {
+        calories: calorieSettings.female ? calorieSettings.female.maintenance : 1400,
+        protein: calorieSettings.female ? calorieSettings.female.protein : 104,
+        carbs: calorieSettings.female ? calorieSettings.female.carbs : 130,
+        fat: calorieSettings.female ? calorieSettings.female.fat : 40,
+        targetWeight: 50
+      }
     }
   };
 }
@@ -720,6 +766,41 @@ function handleDeduplicateFoodItems(ss) {
   }
 
   return { success: true, removedCount: rowsToDelete.length };
+}
+
+function handleSaveCalorieSettings(ss, payload) {
+  if (!payload) return { success: false, message: 'Empty settings' };
+
+  PropertiesService.getScriptProperties().setProperty('CALORIE_SETTINGS', JSON.stringify(payload));
+
+  // Also update 'C หน้าแสดงผลลัพธ์รายวัน' if it exists
+  try {
+    const dashSheet = ss.getSheetByName(SHEET_DASHBOARD) || ss.getSheets()[2];
+    if (dashSheet && dashSheet.getLastRow() >= 6) {
+      const maleProtein = payload.male ? payload.male.protein : 120;
+      const maleMaintenance = payload.male ? payload.male.maintenance : 2000;
+      const femaleProtein = payload.female ? payload.female.protein : 104;
+      const femaleMaintenance = payload.female ? payload.female.maintenance : 1700;
+
+      // Update row 6 (header titles)
+      dashSheet.getRange(6, 2).setValue('🏋️‍♂️ สรุปโภชนาการรายวัน: ฝ่ายชาย (เป้า ' + maleMaintenance + ' kcal | โปรตีน ' + maleProtein + 'g)');
+      dashSheet.getRange(6, 8).setValue('🧘‍♀️ สรุปโภชนาการรายวัน: ฝ่ายหญิง (เป้า ' + femaleMaintenance + ' kcal | โปรตีน ' + femaleProtein + 'g)');
+
+      // Update row 9 (target badges)
+      dashSheet.getRange(9, 3).setValue('เป้า ' + maleProtein + 'g');
+      dashSheet.getRange(9, 9).setValue('เป้า ' + femaleProtein + 'g');
+    }
+  } catch (err) {
+    Logger.log('Could not update sheet C: ' + err);
+  }
+
+  return { success: true, settings: payload };
+}
+
+function handleSaveProjects(ss, payload) {
+  if (!payload || !Array.isArray(payload)) return { success: false, message: 'Invalid projects' };
+  PropertiesService.getScriptProperties().setProperty('PROJECTS_LIST', JSON.stringify(payload));
+  return { success: true, count: payload.length };
 }
 
 function createJsonResponse(data) {

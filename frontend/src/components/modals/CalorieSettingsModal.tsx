@@ -19,6 +19,7 @@ import {
   DEFAULT_CALORIE_SETTINGS,
   getIntakeTarget,
 } from "@/lib/calorieSettings"
+import { callGasApi } from "@/api/gasClient"
 import { toast } from "sonner"
 
 interface CalorieSettingsModalProps {
@@ -77,15 +78,25 @@ export function CalorieSettingsModal({
   const monthlyDeficit = currentPersonSettings.deficit * 30
   const monthlyFatKg = (monthlyDeficit / 7500).toFixed(2)
 
-  const handleSave = () => {
+  const [saving, setSaving] = React.useState(false)
+
+  const handleSave = async () => {
+    setSaving(true)
     saveCalorieSettings(settings)
-    toast.success(`บันทึกการตั้งค่าแคลอรี่สำหรับ ${activeTab === "male" ? "ฝ่ายชาย" : "ฝ่ายหญิง"} เรียบร้อยแล้ว!`, {
-      description: `เผาผลาญ ${currentPersonSettings.maintenance} kcal | ตัดทอน ${currentPersonSettings.deficit} kcal | ควรกินไม่เกิน ${intakeLimit} kcal`,
-    })
-    if (onSaved) {
-      onSaved(settings)
+    try {
+      await callGasApi("SAVE_CALORIE_SETTINGS", settings)
+      toast.success(`บันทึกเป้าหมายลง Google Sheets และซิงค์ทุกอุปกรณ์สำเร็จ!`, {
+        description: `ฝ่ายชาย: เป้าโปรตีน ${settings.male.protein}g | ฝ่ายหญิง: เป้าโปรตีน ${settings.female.protein}g`,
+      })
+    } catch (err) {
+      toast.info("บันทึกในเครื่องเรียบร้อย (ซิงค์ชีตเบื้องหลัง)")
+    } finally {
+      setSaving(false)
+      if (onSaved) {
+        onSaved(settings)
+      }
+      onOpenChange(false)
     }
-    onOpenChange(false)
   }
 
   const handleReset = () => {
