@@ -214,7 +214,7 @@ export function AddMealModal({
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4 py-2">
           {/* Person Selector */}
           <div className="space-y-1.5">
             <Label className="text-slate-300 text-xs">ผู้รับประทาน</Label>
@@ -329,8 +329,8 @@ export function AddMealModal({
                 </Button>
                 <Input
                   type="number"
-                  step="0.25"
-                  min="0.1"
+                  step="any"
+                  min="0.01"
                   value={servings}
                   onChange={(e) => {
                     const val = e.target.value === "" ? "" : Number(e.target.value)
@@ -423,6 +423,7 @@ export function AddMealModal({
               <Label className="text-slate-300 text-xs">แคลอรี่รวม (kcal)</Label>
               <Input
                 type="number"
+                step="any"
                 min="0"
                 value={calories}
                 onChange={(e) => handleCaloriesChange(e.target.value === "" ? "" : Number(e.target.value))}
@@ -433,7 +434,7 @@ export function AddMealModal({
               <Label className="text-emerald-400 text-xs">โปรตีนรวม (g)</Label>
               <Input
                 type="number"
-                step="0.1"
+                step="any"
                 min="0"
                 value={protein}
                 onChange={(e) => handleProteinChange(e.target.value === "" ? "" : Number(e.target.value))}
@@ -444,7 +445,7 @@ export function AddMealModal({
               <Label className="text-amber-400 text-xs">คาร์บรวม (g)</Label>
               <Input
                 type="number"
-                step="0.1"
+                step="any"
                 min="0"
                 value={carbs}
                 onChange={(e) => handleCarbsChange(e.target.value === "" ? "" : Number(e.target.value))}
@@ -455,7 +456,7 @@ export function AddMealModal({
               <Label className="text-rose-400 text-xs">ไขมันรวม (g)</Label>
               <Input
                 type="number"
-                step="0.1"
+                step="any"
                 min="0"
                 value={fat}
                 onChange={(e) => handleFatChange(e.target.value === "" ? "" : Number(e.target.value))}
