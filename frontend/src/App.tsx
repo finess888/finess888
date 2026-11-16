@@ -64,6 +64,7 @@ export default function App() {
   const [addWorkoutOpen, setAddWorkoutOpen] = React.useState(false)
   const [addStepOpen, setAddStepOpen] = React.useState(false)
   const [selectedExerciseForLog, setSelectedExerciseForLog] = React.useState<ExerciseItem | null>(null)
+  const [selectedFoodForMeal, setSelectedFoodForMeal] = React.useState<any>(null)
 
   // Fetch initial data from GAS Backend
   const {
@@ -131,6 +132,7 @@ export default function App() {
 
   // Quick add from food database to today's meal plan
   const handleQuickAddMealFromFood = (food: any) => {
+    setSelectedFoodForMeal(food)
     setAddMealOpen(true)
   }
 
@@ -244,7 +246,10 @@ export default function App() {
 
           <Button
             size="sm"
-            onClick={() => setAddMealOpen(true)}
+            onClick={() => {
+              setSelectedFoodForMeal(null)
+              setAddMealOpen(true)
+            }}
             className="h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-medium flex items-center gap-1"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -376,7 +381,10 @@ export default function App() {
               healthLogs={healthLogs}
               selectedPerson={selectedPerson}
               onSelectPerson={setSelectedPerson}
-              onOpenAddMeal={() => setAddMealOpen(true)}
+              onOpenAddMeal={() => {
+                setSelectedFoodForMeal(null)
+                setAddMealOpen(true)
+              }}
               onOpenAddWeight={() => setAddWeightOpen(true)}
               onToggleMealStatus={handleToggleMealStatus}
               onNavigateToMealPlan={() => setCurrentView("mealplan")}
@@ -388,7 +396,10 @@ export default function App() {
               meals={meals}
               selectedPerson={selectedPerson}
               onSelectPerson={setSelectedPerson}
-              onOpenAddMeal={() => setAddMealOpen(true)}
+              onOpenAddMeal={() => {
+                setSelectedFoodForMeal(null)
+                setAddMealOpen(true)
+              }}
               onToggleMealStatus={handleToggleMealStatus}
               onDeleteMeal={handleDeleteMeal}
             />
@@ -449,10 +460,14 @@ export default function App() {
       {/* Modals */}
       <AddMealModal
         open={addMealOpen}
-        onOpenChange={setAddMealOpen}
+        onOpenChange={(isOpen) => {
+          setAddMealOpen(isOpen)
+          if (!isOpen) setSelectedFoodForMeal(null)
+        }}
         onSave={handleSaveMeal}
         foods={foods}
         defaultPerson={selectedPerson === "ALL" ? "ฝ่ายชาย" : selectedPerson}
+        initialFood={selectedFoodForMeal}
       />
 
       <AddFoodModal

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { toast } from "sonner"
+import { Sparkles, Calculator, Minus, Plus } from "lucide-react"
 
 interface AddMealModalProps {
   open: boolean
@@ -18,6 +19,7 @@ interface AddMealModalProps {
   onSave: (meal: any) => Promise<void>
   foods: any[]
   defaultPerson?: string
+  initialFood?: any
 }
 
 const MEAL_TYPES = [
@@ -34,6 +36,7 @@ export function AddMealModal({
   onSave,
   foods,
   defaultPerson = "ฝ่ายชาย",
+  initialFood = null,
 }: AddMealModalProps) {
   const todayStr = new Date().toISOString().split("T")[0]
   const [date, setDate] = React.useState(todayStr)
@@ -42,16 +45,58 @@ export function AddMealModal({
   const [selectedFoodId, setSelectedFoodId] = React.useState("")
   const [foodName, setFoodName] = React.useState("")
   const [servings, setServings] = React.useState<number | "">(1)
+
+  // Base nutrients per 1 serving
+  const [baseCalories, setBaseCalories] = React.useState<number | "">(350)
+  const [baseProtein, setBaseProtein] = React.useState<number | "">(25)
+  const [baseCarbs, setBaseCarbs] = React.useState<number | "">(40)
+  const [baseFat, setBaseFat] = React.useState<number | "">(10)
+
+  // Total scaled nutrients for this meal entry (base * servings)
   const [calories, setCalories] = React.useState<number | "">(350)
   const [protein, setProtein] = React.useState<number | "">(25)
   const [carbs, setCarbs] = React.useState<number | "">(40)
   const [fat, setFat] = React.useState<number | "">(10)
+
   const [notes, setNotes] = React.useState("")
   const [saving, setSaving] = React.useState(false)
 
+  // Apply food item data
+  const applyFoodItem = React.useCallback((f: any, currentServings: number | "") => {
+    const bCal = Number(f.calories || f.Calories || 0)
+    const bProt = Number(f.protein || f.Protein || 0)
+    const bCarb = Number(f.carbs || f.Carbs || 0)
+    const bFat = Number(f.fat || f.Fat || 0)
+
+    setBaseCalories(bCal)
+    setBaseProtein(bProt)
+    setBaseCarbs(bCarb)
+    setBaseFat(bFat)
+
+    const serv = typeof currentServings === "number" && currentServings > 0 ? currentServings : 1
+    setCalories(Math.round(bCal * serv))
+    setProtein(Number((bProt * serv).toFixed(1)))
+    setCarbs(Number((bCarb * serv).toFixed(1)))
+    setFat(Number((bFat * serv).toFixed(1)))
+
+    setFoodName(f.name || f.Name || "")
+    if (f.servingSize) {
+      setNotes((prev) => (prev ? prev : `ขนาดเสิร์ฟมาตรฐาน: ${f.servingSize}`))
+    }
+  }, [])
+
+  // Effect when modal opens or initialFood changes
   React.useEffect(() => {
-    setPerson(defaultPerson)
-  }, [defaultPerson])
+    if (open) {
+      setPerson(defaultPerson === "ALL" ? "ฝ่ายชาย" : defaultPerson)
+      if (initialFood) {
+        const foodId = String(initialFood.id || initialFood.code || initialFood.name || "")
+        setSelectedFoodId(foodId)
+        applyFoodItem(initialFood, 1)
+        setServings(1)
+      }
+    }
+  }, [open, defaultPerson, initialFood, applyFoodItem])
 
   const foodOptions = React.useMemo(() => {
     return foods.map((f) => ({
@@ -60,20 +105,69 @@ export function AddMealModal({
     }))
   }, [foods])
 
-  // When selecting food from DB, auto-fill macros
+  // Handle food selection from dropdown
   const handleSelectFood = (foodId: string) => {
     setSelectedFoodId(foodId)
     if (!foodId) return
     const f = foods.find((item) => String(item.id || item.code || item.name) === String(foodId))
     if (f) {
-      setFoodName(f.name || f.Name || "")
-      setCalories(Number(f.calories || f.Calories || 0))
-      setProtein(Number(f.protein || f.Protein || 0))
-      setCarbs(Number(f.carbs || f.Carbs || 0))
-      setFat(Number(f.fat || f.Fat || 0))
-      if (f.servingSize) {
-        setNotes((prev) => prev || `ขนาดเสิร์ฟ: ${f.servingSize}`)
+      applyFoodItem(f, servings)
+    }
+  }
+
+  // Handle changing servings (multiplies all macros by servings)
+  const handleServingsChange = (newServings: number | "") => {
+    setServings(newServings)
+    if (typeof newServings === "number" && newServings > 0) {
+      if (baseCalories !== "") {
+        setCalories(Math.round(Number(baseCalories) * newServings))
       }
+      if (baseProtein !== "") {
+        setProtein(Number((Number(baseProtein) * newServings).toFixed(1)))
+      }
+      if (baseCarbs !== "") {
+        setCarbs(Number((Number(baseCarbs) * newServings).toFixed(1)))
+      }
+      if (baseFat !== "") {
+        setFat(Number((Number(baseFat) * newServings).toFixed(1)))
+      }
+    }
+  }
+
+  // Direct manual edits to total nutrients update base accordingly
+  const handleCaloriesChange = (val: number | "") => {
+    setCalories(val)
+    if (typeof val === "number" && typeof servings === "number" && servings > 0) {
+      setBaseCalories(Math.round(val / servings))
+    } else if (val === "") {
+      setBaseCalories("")
+    }
+  }
+
+  const handleProteinChange = (val: number | "") => {
+    setProtein(val)
+    if (typeof val === "number" && typeof servings === "number" && servings > 0) {
+      setBaseProtein(Number((val / servings).toFixed(1)))
+    } else if (val === "") {
+      setBaseProtein("")
+    }
+  }
+
+  const handleCarbsChange = (val: number | "") => {
+    setCarbs(val)
+    if (typeof val === "number" && typeof servings === "number" && servings > 0) {
+      setBaseCarbs(Number((val / servings).toFixed(1)))
+    } else if (val === "") {
+      setBaseCarbs("")
+    }
+  }
+
+  const handleFatChange = (val: number | "") => {
+    setFat(val)
+    if (typeof val === "number" && typeof servings === "number" && servings > 0) {
+      setBaseFat(Number((val / servings).toFixed(1)))
+    } else if (val === "") {
+      setBaseFat("")
     }
   }
 
@@ -99,7 +193,9 @@ export function AddMealModal({
         notes: notes.trim(),
       })
 
-      toast.success("บันทึกมื้ออาหารลงใน Google Sheets สำเร็จ!")
+      toast.success("บันทึกมื้ออาหารลงใน Google Sheets สำเร็จ!", {
+        description: `${foodName} (${servings || 1} เสิร์ฟ) • ${calories} kcal (P: ${protein}g, C: ${carbs}g, F: ${fat}g)`
+      })
       onOpenChange(false)
       setSelectedFoodId("")
       setFoodName("")
@@ -113,7 +209,7 @@ export function AddMealModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg bg-[#151d2f] border-[#26334d] text-slate-100">
+      <DialogContent className="max-w-lg bg-[#151d2f] border-[#26334d] text-slate-100 max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
             <span>🍽️</span> บันทึกมื้ออาหารลงชีต (จดบันทึก)
@@ -134,7 +230,7 @@ export function AddMealModal({
                     : "bg-[#0b0f19] border-[#26334d] text-slate-400 hover:text-white"
                 }`}
               >
-                <span>🏋️‍♂️</span> ฝ่ายชาย (เป้า 2,000 kcal)
+                <span>🏋️‍♂️</span> ฝ่ายชาย
               </button>
               <button
                 type="button"
@@ -145,7 +241,7 @@ export function AddMealModal({
                     : "bg-[#0b0f19] border-[#26334d] text-slate-400 hover:text-white"
                 }`}
               >
-                <span>🧘‍♀️</span> ฝ่ายหญิง (เป้า 1,400 kcal)
+                <span>🧘‍♀️</span> ฝ่ายหญิง
               </button>
             </div>
           </div>
@@ -157,7 +253,7 @@ export function AddMealModal({
                 <Label className="text-xs text-emerald-400 font-medium flex items-center gap-1.5">
                   <span>🔍</span> เลือกด่วนจากคลังเมนูอาหาร (A หน้าเก็บเมนูอาหาร)
                 </Label>
-                <span className="text-[10px] text-slate-400">พิมพ์ค้นหาได้ (Type to search)</span>
+                <span className="text-[10px] text-slate-400">พิมพ์ค้นหาได้</span>
               </div>
               <SearchableSelect
                 options={foodOptions}
@@ -196,8 +292,8 @@ export function AddMealModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2 space-y-1.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2 space-y-1.5">
               <Label className="text-slate-300 text-xs">ชื่อรายการอาหาร *</Label>
               <Input
                 placeholder="เช่น ข้าวกล้องอกไก่ต้ม"
@@ -207,61 +303,164 @@ export function AddMealModal({
                 className="bg-[#0b0f19] border-[#26334d] text-white h-9 text-sm"
               />
             </div>
+
+            {/* Servings Input with Multiplier Controls */}
             <div className="space-y-1.5">
-              <Label className="text-slate-300 text-xs">จำนวน (เสิร์ฟ)</Label>
-              <Input
-                type="number"
-                step="0.5"
-                min="0.5"
-                value={servings}
-                onChange={(e) => setServings(e.target.value === "" ? "" : Number(e.target.value))}
-                className="bg-[#0b0f19] border-[#26334d] text-white h-9 text-sm"
-              />
+              <div className="flex items-center justify-between">
+                <Label className="text-slate-300 text-xs font-semibold flex items-center gap-1">
+                  <Calculator className="h-3 w-3 text-emerald-400" />
+                  จำนวน (เสิร์ฟ)
+                </Label>
+                <span className="text-[10px] text-emerald-400 font-mono font-bold">
+                  {typeof servings === "number" ? `×${servings}` : "×1"}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const current = typeof servings === "number" ? servings : 1
+                    const nextVal = Math.max(0.25, Math.round((current - 0.5) * 100) / 100)
+                    handleServingsChange(nextVal)
+                  }}
+                  className="h-9 w-8 p-0 border-[#26334d] bg-[#0b0f19] text-slate-300 hover:text-white hover:bg-slate-800 shrink-0"
+                >
+                  <Minus className="h-3.5 w-3.5" />
+                </Button>
+                <Input
+                  type="number"
+                  step="0.25"
+                  min="0.1"
+                  value={servings}
+                  onChange={(e) => {
+                    const val = e.target.value === "" ? "" : Number(e.target.value)
+                    handleServingsChange(val)
+                  }}
+                  className="bg-[#0b0f19] border-[#26334d] text-white h-9 text-sm text-center font-bold font-mono"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const current = typeof servings === "number" ? servings : 1
+                    const nextVal = Math.round((current + 0.5) * 100) / 100
+                    handleServingsChange(nextVal)
+                  }}
+                  className="h-9 w-8 p-0 border-[#26334d] bg-[#0b0f19] text-slate-300 hover:text-white hover:bg-slate-800 shrink-0"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+
+              {/* Quick serving buttons */}
+              <div className="flex items-center gap-1 pt-0.5">
+                {[0.5, 1, 1.5, 2, 2.5, 3].map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => handleServingsChange(val)}
+                    className={`flex-1 py-1 text-[10px] font-semibold rounded-md transition-all ${
+                      servings === val
+                        ? "bg-emerald-600 text-white shadow-sm font-bold"
+                        : "bg-[#0b0f19] text-slate-400 hover:text-white border border-[#26334d]/60"
+                    }`}
+                  >
+                    {val}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Macros */}
+          {/* Interactive Calculation & Multiplier Summary Banner */}
+          <div className="p-3 rounded-xl bg-gradient-to-r from-[#0d1424] to-[#141b2f] border border-emerald-500/30 text-xs space-y-2 shadow-inner">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-emerald-300 flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+                สารอาหารคำนวณคูณตามจำนวน {servings || 1} เสิร์ฟ:
+              </span>
+              <span className="text-[10px] text-slate-400">
+                {baseCalories !== "" ? `ฐาน: ${baseCalories} kcal / เสิร์ฟ` : "กรอกสารอาหาร"}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2 text-center font-mono">
+              <div className="p-1.5 bg-[#0b0f19] rounded-lg border border-[#26334d]">
+                <span className="text-[10px] text-slate-400 block font-sans">แคลอรี่รวม</span>
+                <span className="text-emerald-400 font-bold text-sm">{calories || 0}</span>
+                <span className="text-[9px] text-slate-500 block font-sans">
+                  {baseCalories !== "" && servings !== 1 ? `${baseCalories} × ${servings}` : "kcal"}
+                </span>
+              </div>
+              <div className="p-1.5 bg-[#0b0f19] rounded-lg border border-[#26334d]">
+                <span className="text-[10px] text-slate-400 block font-sans">โปรตีนรวม</span>
+                <span className="text-emerald-300 font-bold text-sm">{protein || 0}</span>
+                <span className="text-[9px] text-slate-500 block font-sans">
+                  {baseProtein !== "" && servings !== 1 ? `${baseProtein} × ${servings}` : "กรัม"}
+                </span>
+              </div>
+              <div className="p-1.5 bg-[#0b0f19] rounded-lg border border-[#26334d]">
+                <span className="text-[10px] text-slate-400 block font-sans">คาร์บรวม</span>
+                <span className="text-amber-300 font-bold text-sm">{carbs || 0}</span>
+                <span className="text-[9px] text-slate-500 block font-sans">
+                  {baseCarbs !== "" && servings !== 1 ? `${baseCarbs} × ${servings}` : "กรัม"}
+                </span>
+              </div>
+              <div className="p-1.5 bg-[#0b0f19] rounded-lg border border-[#26334d]">
+                <span className="text-[10px] text-slate-400 block font-sans">ไขมันรวม</span>
+                <span className="text-rose-300 font-bold text-sm">{fat || 0}</span>
+                <span className="text-[9px] text-slate-500 block font-sans">
+                  {baseFat !== "" && servings !== 1 ? `${baseFat} × ${servings}` : "กรัม"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Macros input fields */}
           <div className="grid grid-cols-4 gap-2 pt-1">
             <div className="space-y-1.5">
-              <Label className="text-slate-300 text-xs">แคลอรี่ (kcal)</Label>
+              <Label className="text-slate-300 text-xs">แคลอรี่รวม (kcal)</Label>
               <Input
                 type="number"
                 min="0"
                 value={calories}
-                onChange={(e) => setCalories(e.target.value === "" ? "" : Number(e.target.value))}
+                onChange={(e) => handleCaloriesChange(e.target.value === "" ? "" : Number(e.target.value))}
                 className="bg-[#0b0f19] border-[#26334d] text-white h-9 text-sm"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-emerald-400 text-xs">โปรตีน (g)</Label>
+              <Label className="text-emerald-400 text-xs">โปรตีนรวม (g)</Label>
               <Input
                 type="number"
                 step="0.1"
                 min="0"
                 value={protein}
-                onChange={(e) => setProtein(e.target.value === "" ? "" : Number(e.target.value))}
+                onChange={(e) => handleProteinChange(e.target.value === "" ? "" : Number(e.target.value))}
                 className="bg-[#0b0f19] border-[#26334d] text-white h-9 text-sm"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-amber-400 text-xs">คาร์บ (g)</Label>
+              <Label className="text-amber-400 text-xs">คาร์บรวม (g)</Label>
               <Input
                 type="number"
                 step="0.1"
                 min="0"
                 value={carbs}
-                onChange={(e) => setCarbs(e.target.value === "" ? "" : Number(e.target.value))}
+                onChange={(e) => handleCarbsChange(e.target.value === "" ? "" : Number(e.target.value))}
                 className="bg-[#0b0f19] border-[#26334d] text-white h-9 text-sm"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-rose-400 text-xs">ไขมัน (g)</Label>
+              <Label className="text-rose-400 text-xs">ไขมันรวม (g)</Label>
               <Input
                 type="number"
                 step="0.1"
                 min="0"
                 value={fat}
-                onChange={(e) => setFat(e.target.value === "" ? "" : Number(e.target.value))}
+                onChange={(e) => handleFatChange(e.target.value === "" ? "" : Number(e.target.value))}
                 className="bg-[#0b0f19] border-[#26334d] text-white h-9 text-sm"
               />
             </div>
@@ -291,7 +490,7 @@ export function AddMealModal({
               disabled={saving}
               className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium"
             >
-              {saving ? "กำลังบันทึกลงชีต..." : "บันทึกลง Google Sheets"}
+              {saving ? "กำลังบันทึกลงชีต..." : `บันทึกลงชีต (${servings || 1} เสิร์ฟ • ${calories} kcal)`}
             </Button>
           </DialogFooter>
         </form>
