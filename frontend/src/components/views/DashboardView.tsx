@@ -25,13 +25,23 @@ import {
   Award,
   Swords,
   Users,
+  Clock,
+  Lightbulb,
+  Activity,
 } from "lucide-react"
 import {
   AllCalorieSettings,
   getCalorieSettings,
   getIntakeTarget,
 } from "@/lib/calorieSettings"
+import {
+  getActiveProject,
+  FitnessProject,
+  analyzeProject,
+} from "@/lib/projectManager"
 import { CalorieSettingsModal } from "@/components/modals/CalorieSettingsModal"
+import { ProjectReviewModal } from "@/components/modals/ProjectReviewModal"
+import { formatThaiDate } from "@/lib/utils"
 import { Doughnut, Bar } from "react-chartjs-2"
 import {
   Chart as ChartJS,
@@ -125,6 +135,16 @@ export function DashboardView({
   const TARGET_FAT = isAll ? (maleTargetFat + femaleTargetFat) : (isFemale ? femaleTargetFat : maleTargetFat)
   const START_WEIGHT = isFemale ? femaleStartWeight : maleStartWeight
   const ULTIMATE_TARGET_WEIGHT = isFemale ? femaleGoalWeight : maleGoalWeight
+
+  // Weight Loss Project & Deadline state
+  const [projectModalOpen, setProjectModalOpen] = React.useState(false)
+  const [activeProject, setActiveProject] = React.useState<FitnessProject | null>(() =>
+    getActiveProject(isFemale ? "ฝ่ายหญิง" : "ฝ่ายชาย")
+  )
+
+  React.useEffect(() => {
+    setActiveProject(getActiveProject(isFemale ? "ฝ่ายหญิง" : "ฝ่ายชาย"))
+  }, [isFemale, selectedPerson])
 
   // 1. Interactive Fat Loss Goal (User can customize, default 10 kg)
   const storageKey = isFemale ? "finess_fatloss_target_female" : "finess_fatloss_target_male"
@@ -236,6 +256,11 @@ export function DashboardView({
   const totalCarbs = isAll ? (maleCarbs + femaleCarbs) : (isMale ? maleCarbs : femaleCarbs)
   const totalFat = isAll ? (maleFat + femaleFat) : (isMale ? maleFat : femaleFat)
   const calorieDiff = TARGET_CALORIES - totalCalories
+
+  // Project analysis
+  const projectAnalysis = activeProject
+    ? analyzeProject(activeProject, meals, healthLogs, MAINTENANCE_CALORIES, TARGET_CALORIES)
+    : null
 
   // 🏆 Adherence Scoring (Who is following the plan better?)
   const calculateScore = (
@@ -746,36 +771,60 @@ export function DashboardView({
         </Card>
       )}
 
-      {/* 🎯 FEATURE 1: CUMULATIVE FAT LOSS & CALORIE DEFICIT GOAL WIDGET */}
-      <Card className="bg-gradient-to-br from-[#121a2d] to-[#151d2f] border border-emerald-500/30 shadow-xl overflow-hidden">
-        <CardHeader className="border-b border-[#26334d] pb-3 bg-[#0d1424]/60">
+      {/* 🎯 FEATURE 1: WEIGHT LOSS PROJECT & DEADLINE SYSTEM */}
+      <Card className="bg-gradient-to-br from-[#121a2d] to-[#151d2f] border-2 border-emerald-500/40 shadow-xl overflow-hidden">
+        <CardHeader className="border-b border-[#26334d] pb-3 bg-[#0d1424]/70">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                <Target className="h-5 w-5 text-emerald-400" />
-                เป้าหมายการตัดทอนแคลอรี่และลดไขมันรวม (Total Calorie Deficit & Fat Loss)
-              </CardTitle>
-              <CardDescription className="text-xs text-slate-400">
-                กฎทางโภชนาการ: เพื่อลดไขมัน 1 กิโลกรัม ต้องตัดทอนแคลอรี่ออกประมาณ 7,500 kcal
-              </CardDescription>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                  <Target className="h-5 w-5 text-emerald-400" />
+                  {activeProject ? activeProject.title : "โปรเจกต์ลดน้ำหนักและเดดไลน์"}
+                </CardTitle>
+                <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px]">
+                  {activeProject?.status === "active" ? "🟢 กำลังดำเนินการ" : "🏁 บันทึกสรุปแล้ว"}
+                </Badge>
+              </div>
+
+              {activeProject ? (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300 mt-1">
+                  <span>📅 เริ่ม: {formatThaiDate(activeProject.startDate)}</span>
+                  <span>➔</span>
+                  <span className="font-semibold text-amber-300 flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5 text-amber-400" />
+                    เดดไลน์: {formatThaiDate(activeProject.deadlineDate)}
+                  </span>
+                  <span>•</span>
+                  <span className={projectAnalysis?.isOverdue ? "text-rose-400 font-semibold" : "text-emerald-400 font-semibold"}>
+                    {projectAnalysis?.isOverdue ? "⚠️ เลยเดดไลน์แล้ว" : `⏳ เหลือเวลาอีก ${projectAnalysis?.daysRemaining} วัน`}
+                  </span>
+                </div>
+              ) : (
+                <CardDescription className="text-xs text-slate-400 mt-1">
+                  กฎทางโภชนาการ: เพื่อลดไขมัน 1 กิโลกรัม ต้องตัดทอนแคลอรี่ออกประมาณ 7,500 kcal
+                </CardDescription>
+              )}
             </div>
 
-            {/* Quick target selector pills */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs text-slate-400 mr-1">เลือกเป้าหมาย:</span>
-              {[5, 10, 15, 20, 30].map((kg) => (
-                <button
-                  key={kg}
-                  onClick={() => handleUpdateTargetKg(kg)}
-                  className={`text-xs px-2.5 py-1 rounded-md font-medium transition-all ${
-                    targetFatLossKg === kg
-                      ? "bg-emerald-600 text-white font-bold shadow-md shadow-emerald-950"
-                      : "bg-[#0b0f19] text-slate-400 border border-[#26334d] hover:text-white"
-                  }`}
-                >
-                  {kg} กก.
-                </button>
-              ))}
+            {/* Project Action Buttons */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                onClick={() => setProjectModalOpen(true)}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold h-8 px-3 shadow-md shadow-emerald-950 flex items-center gap-1.5"
+                title="ดูบทสรุปและรีวิวโปรเจกต์ย้อนหลัง"
+              >
+                <Trophy className="h-3.5 w-3.5 text-amber-300" />
+                สรุปผลรีวิวโปรเจกต์
+              </Button>
+              <Button
+                onClick={() => setProjectModalOpen(true)}
+                variant="outline"
+                className="border-indigo-500/40 text-indigo-300 hover:text-white hover:bg-indigo-600/20 text-xs font-medium h-8 px-2.5"
+                title="สร้างโปรเจกต์ลดน้ำหนักใหม่พร้อมเดดไลน์"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                สร้างโปรเจกต์ใหม่
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -784,41 +833,47 @@ export function DashboardView({
           {/* Main Target Metrics Banner */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div className="bg-[#0b0f19] p-4 rounded-xl border border-[#26334d]">
-              <span className="text-xs text-slate-400 block mb-1">🎯 เป้าหมายลดไขมัน</span>
+              <span className="text-xs text-slate-400 block mb-1">🎯 เป้าหมายโปรเจกต์นี้</span>
               <div className="text-2xl font-bold text-white flex items-baseline gap-1">
-                <span>{targetFatLossKg}</span>
+                <span>{activeProject ? activeProject.targetFatLossKg : targetFatLossKg}</span>
                 <span className="text-sm font-normal text-slate-400">กิโลกรัม (kg)</span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">กำหนดเองได้ตามแผนระยะยาว</p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                เริ่ม {projectAnalysis?.startWeight || START_WEIGHT} ➔ เป้า {activeProject?.targetWeight || (START_WEIGHT - targetFatLossKg)} กก.
+              </p>
             </div>
 
             <div className="bg-[#0b0f19] p-4 rounded-xl border border-[#26334d]">
               <span className="text-xs text-slate-400 block mb-1">🔥 ต้องตัดทอนแคลอรี่รวม</span>
               <div className="text-2xl font-bold text-amber-400 flex items-baseline gap-1">
-                <span>{totalDeficitTargetKcal.toLocaleString()}</span>
+                <span>{(activeProject?.targetDeficitKcal || totalDeficitTargetKcal).toLocaleString()}</span>
                 <span className="text-sm font-normal text-slate-400">kcal</span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">คำนวณจาก {targetFatLossKg} × 7,500 kcal</p>
-            </div>
-
-            <div className="bg-[#0b0f19] p-4 rounded-xl border border-[#26334d]">
-              <span className="text-xs text-slate-400 block mb-1">⚡ ตัดทอนสะสมไปแล้ว</span>
-              <div className="text-2xl font-bold text-emerald-400 flex items-baseline gap-1">
-                <span>{Math.round(accumulatedDeficitKcal).toLocaleString()}</span>
-                <span className="text-sm font-normal text-slate-400">kcal</span>
-              </div>
-              <p className="text-[11px] text-emerald-500/80 mt-1">
-                ลดได้แล้ว ~{(accumulatedDeficitKcal / 7500).toFixed(2)} kg
+              <p className="text-[11px] text-slate-500 mt-1">
+                คำนวณจาก {activeProject?.targetFatLossKg || targetFatLossKg} × 7,500 kcal
               </p>
             </div>
 
             <div className="bg-[#0b0f19] p-4 rounded-xl border border-[#26334d]">
-              <span className="text-xs text-slate-400 block mb-1">⏳ ยังต้องตัดทอนอีก</span>
-              <div className="text-2xl font-bold text-rose-400 flex items-baseline gap-1">
-                <span>{Math.round(remainingKcal).toLocaleString()}</span>
+              <span className="text-xs text-slate-400 block mb-1">⚡ ตัดทอนสะสมได้จริง</span>
+              <div className="text-2xl font-bold text-emerald-400 flex items-baseline gap-1">
+                <span>{Math.round(projectAnalysis?.deficitAchieved || accumulatedDeficitKcal).toLocaleString()}</span>
                 <span className="text-sm font-normal text-slate-400">kcal</span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">เหลืออีกประมาณ {remainingFatKg} กิโลกรัม</p>
+              <p className="text-[11px] text-emerald-400/90 mt-1">
+                สำเร็จ {projectAnalysis?.deficitProgressPct || progressPercent.toFixed(0)}% ของเป้าหมาย
+              </p>
+            </div>
+
+            <div className="bg-[#0b0f19] p-4 rounded-xl border border-[#26334d]">
+              <span className="text-xs text-slate-400 block mb-1">📉 ลดได้จริงแล้ว</span>
+              <div className="text-2xl font-bold text-emerald-300 flex items-baseline gap-1">
+                <span>{projectAnalysis?.weightLost || (accumulatedDeficitKcal / 7500).toFixed(1)}</span>
+                <span className="text-sm font-normal text-slate-400">กิโลกรัม</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                เหลืออีก {projectAnalysis?.weightRemaining || remainingFatKg} กก. จนถึงเป้าหมาย
+              </p>
             </div>
           </div>
 
@@ -828,24 +883,63 @@ export function DashboardView({
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-white">ความคืบหน้ารวมต่อเป้าหมาย</span>
                 <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[11px]">
-                  ทำไปแล้ว {progressPercent.toFixed(1)}%
+                  ทำไปแล้ว {projectAnalysis?.deficitProgressPct || progressPercent.toFixed(1)}%
                 </Badge>
               </div>
               <span className="text-xs text-slate-400 font-mono">
-                {Math.round(accumulatedDeficitKcal).toLocaleString()} / {totalDeficitTargetKcal.toLocaleString()} kcal
+                {Math.round(projectAnalysis?.deficitAchieved || accumulatedDeficitKcal).toLocaleString()} / {(activeProject?.targetDeficitKcal || totalDeficitTargetKcal).toLocaleString()} kcal
               </span>
             </div>
 
             <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden p-0.5">
               <div
                 className="bg-gradient-to-r from-emerald-500 to-teal-400 h-2 rounded-full transition-all duration-700 shadow-lg shadow-emerald-500/50"
-                style={{ width: `${Math.max(2, Math.min(100, progressPercent))}%` }}
+                style={{ width: `${Math.max(2, Math.min(100, projectAnalysis?.deficitProgressPct || progressPercent))}%` }}
               />
             </div>
 
             <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
               <span>จุดเริ่มต้น: 0 kcal (0%)</span>
-              <span>เป้าหมายความสำเร็จ: {totalDeficitTargetKcal.toLocaleString()} kcal (100%)</span>
+              <span>เป้าหมายความสำเร็จ: {(activeProject?.targetDeficitKcal || totalDeficitTargetKcal).toLocaleString()} kcal (100%)</span>
+            </div>
+          </div>
+
+          {/* 💡 Quick Retrospective Summary Bar (ตอบโจทย์: กินเกินไหม / ออกกำลังกาย / ปรับตัว) */}
+          <div className="p-3.5 rounded-xl bg-gradient-to-r from-[#0d1527] to-[#121c33] border border-indigo-500/30 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <Flame className="h-4 w-4 text-orange-400 shrink-0" />
+              <div>
+                <span className="text-slate-400 block text-[11px]">กินเกินไหม?</span>
+                <strong className={projectAnalysis && projectAnalysis.daysOverIntake > 0 ? "text-amber-300" : "text-emerald-400"}>
+                  {projectAnalysis && projectAnalysis.daysOverIntake > 0
+                    ? `กินเกิน ${projectAnalysis.daysOverIntake} วัน (คุมดี ${projectAnalysis.daysCompliant} วัน)`
+                    : "คุมแคลอรี่ได้ดี ไม่มีวันหลุด ✨"}
+                </strong>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-emerald-400 shrink-0" />
+              <div>
+                <span className="text-slate-400 block text-[11px]">ออกกำลังกายเป็นยังไง?</span>
+                <strong className="text-indigo-300">
+                  {projectAnalysis && projectAnalysis.activitiesCount > 0
+                    ? `บันทึกกิจกรรม ${projectAnalysis.activitiesCount} วัน`
+                    : "ยังไม่มีบันทึกกิจกรรม"}
+                </strong>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between sm:justify-end gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setProjectModalOpen(true)}
+                className="text-xs text-amber-300 hover:text-white hover:bg-amber-500/20 flex items-center gap-1 p-0 h-auto font-medium"
+              >
+                <span>💡 บทเรียนและข้อแนะนำโปรเจกต์ต่อไป</span>
+                <ArrowRight className="h-3 w-3" />
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -1185,6 +1279,18 @@ export function DashboardView({
         onOpenChange={setCalorieModalOpen}
         currentPerson={selectedPerson}
         onSaved={setCalorieSettings}
+      />
+
+      {/* Weight Loss Project & Deadline Review Modal */}
+      <ProjectReviewModal
+        open={projectModalOpen}
+        onOpenChange={setProjectModalOpen}
+        currentPerson={selectedPerson === "ALL" ? "ฝ่ายชาย" : selectedPerson}
+        meals={meals}
+        healthLogs={healthLogs}
+        maintenanceCalories={MAINTENANCE_CALORIES}
+        targetIntakeCalories={TARGET_CALORIES}
+        onProjectUpdated={(newP) => setActiveProject(newP)}
       />
     </div>
   )
