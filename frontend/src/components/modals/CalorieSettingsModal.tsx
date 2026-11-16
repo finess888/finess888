@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Flame, Target, Utensils, Sparkles, RefreshCcw, Footprints } from "lucide-react"
+import { Flame, Target, Utensils, Sparkles, RefreshCcw, Footprints, Sliders } from "lucide-react"
 import {
   AllCalorieSettings,
   PersonCalorieSettings,
@@ -110,11 +110,11 @@ export function CalorieSettingsModal({
       <DialogContent className="max-w-lg bg-[#111726] border-[#26334d] text-white p-6 rounded-2xl shadow-2xl">
         <DialogHeader>
           <DialogTitle className="text-lg font-bold flex items-center gap-2 text-white">
-            <Flame className="h-5 w-5 text-amber-400" />
-            ตั้งค่าแคลอรี่เผาผลาญและเป้าหมายตัดทอน (TDEE & Deficit)
+            <Sliders className="h-5 w-5 text-indigo-400" />
+            ตั้งค่าเป้าหมายสุขภาพและโภชนาการ (Health Goals)
           </DialogTitle>
           <p className="text-xs text-slate-400">
-            กำหนดอัตราเผาผลาญต่อวันและเป้าตัดทอนแคลอรี่ เพื่อคำนวณโควต้าอาหารที่ควรกินในแต่ละวัน
+            กำหนดอัตราเผาผลาญ (TDEE), โควต้าอาหาร, สัดส่วนสารอาหาร และเป้าหมายก้าวเดินประจำวัน
           </p>
         </DialogHeader>
 

@@ -29,6 +29,7 @@ import {
   Lightbulb,
   Activity,
   Footprints,
+  Pencil,
 } from "lucide-react"
 import {
   AllCalorieSettings,
@@ -466,15 +467,15 @@ export function DashboardView({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Calorie Settings Button */}
+          {/* Settings Button */}
           <Button
             onClick={() => setCalorieModalOpen(true)}
             variant="outline"
-            className="border-amber-500/40 text-amber-300 hover:text-white hover:bg-amber-500/20 text-xs font-medium flex items-center gap-1.5 h-9 px-3 shadow-md"
-            title="ตั้งค่าแคลอรี่เผาผลาญต่อวัน (TDEE) และเป้าหมายตัดทอนแคลอรี่"
+            className="border-[#26334d] bg-[#0b0f19] text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-medium flex items-center gap-1.5 h-9 px-3"
+            title="ตั้งค่าเป้าหมายสุขภาพ: TDEE, แคลอรี่, สัดส่วนสารอาหาร และก้าวเดิน"
           >
-            <Flame className="h-4 w-4 text-amber-400" />
-            ตั้งเป้าแคลอรี่ (TDEE)
+            <Sliders className="h-3.5 w-3.5 text-slate-400" />
+            ตั้งค่าเป้าหมาย
           </Button>
 
           {/* Toggle Couple View */}
@@ -938,17 +939,17 @@ export function DashboardView({
               <div className="flex items-center gap-2">
                 <Footprints className="h-4 w-4 text-indigo-400 shrink-0" />
                 <div>
-                  <div className="flex items-center gap-1.5 flex-wrap">
+                  <div className="flex items-center gap-1">
                     <span className="text-slate-400 text-[11px]">
                       ก้าวเดิน (เป้า {(activeProject?.targetDailySteps || (isFemale ? femaleSettings.stepGoal : maleSettings.stepGoal) || 8000).toLocaleString()} ก้าว/วัน)
                     </span>
                     <button
                       type="button"
                       onClick={() => setStepGoalModalOpen(true)}
-                      className="text-[10px] text-amber-400 hover:text-amber-300 font-semibold underline decoration-dashed flex items-center gap-0.5 cursor-pointer"
-                      title="คลิกเพื่อเปลี่ยนเป้าหมายก้าวเดินต่อวัน"
+                      className="text-slate-500 hover:text-indigo-300 transition-colors p-0.5 rounded hover:bg-slate-800"
+                      title="แก้ไขเป้าหมายก้าวเดิน"
                     >
-                      <span>🎯 ตั้งเป้า</span>
+                      <Pencil className="h-2.5 w-2.5" />
                     </button>
                   </div>
                   <strong className="text-indigo-300 font-mono">
@@ -965,24 +966,15 @@ export function DashboardView({
                   </strong>
                 </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0 ml-1">
+              {onOpenAddStep && (
                 <button
                   type="button"
-                  onClick={() => setStepGoalModalOpen(true)}
-                  className="text-[10px] bg-amber-950/60 text-amber-300 hover:bg-amber-600 hover:text-white px-2 py-0.5 rounded border border-amber-500/40 font-semibold transition-all"
+                  onClick={onOpenAddStep}
+                  className="text-[10px] bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white px-2.5 py-1 rounded-md border border-indigo-500/30 font-medium transition-all shrink-0 ml-auto sm:ml-2"
                 >
-                  🎯 ตั้งเป้า
+                  + กรอกก้าว
                 </button>
-                {onOpenAddStep && (
-                  <button
-                    type="button"
-                    onClick={onOpenAddStep}
-                    className="text-[10px] bg-indigo-950/60 text-indigo-300 hover:bg-indigo-600 hover:text-white px-2 py-0.5 rounded border border-indigo-500/40 font-semibold transition-all"
-                  >
-                    + กรอกก้าว
-                  </button>
-                )}
-              </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between sm:justify-end gap-2">
