@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="th" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>แผนการกิน - Finess Meal & Nutrition</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      // Single Page Apps for GitHub Pages
+      (function(l) {
+        if (l.search[1] === '/' ) {
+          var decoded = l.search.slice(1).split('&').map(function(s) { 
+            return s.replace(/~and~/g, '&')
+          }).join('?');
+          window.history.replaceState(null, null,
+              l.pathname.slice(0, -1) + decoded + l.hash
+          );
+        }
+      }(window.location));
+
+      // 1. Unregister any stale / stray service workers or PWA caches
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for (var i = 0; i < registrations.length; i++) {
+            registrations[i].unregister();
+          }
+        }).catch(function() {});
+      }
+
+      // 2. Global error listener for script 404s
+      window.addEventListener('error', function (event) {
+        var target = event.target || event.srcElement;
+        if (target && target.tagName === 'SCRIPT' && target.src) {
+          if (target.src.indexOf('/assets/') !== -1 || target.src.indexOf('index-') !== -1) {
+            console.warn('Main bundle script failed to load:', target.src);
+            try {
+              var lastReload = sessionStorage.getItem('meal_bundle_reload_ts');
+              var now = Date.now();
+              if (!lastReload || (now - parseInt(lastReload, 10) > 8000)) {
+                sessionStorage.setItem('meal_bundle_reload_ts', now.toString());
+                var url = new URL(window.location.href);
+                url.searchParams.set('_v', now.toString());
+                window.location.replace(url.toString());
+                return;
+              }
+            } catch (e) {
+              window.location.reload();
+            }
+          }
+        }
+      }, true);
+
+      // 3. Global error listener for stale dynamic chunk preload failures
+      window.addEventListener('vite:preloadError', function () {
+        try {
+          var lastPreloadRetry = sessionStorage.getItem('meal_preload_retry');
+          var now = Date.now();
+          if (lastPreloadRetry && (now - parseInt(lastPreloadRetry, 10) < 15000)) {
+            return;
+          }
+          sessionStorage.setItem('meal_preload_retry', now.toString());
+        } catch (e) {}
+        try {
+          var url = new URL(window.location.href);
+          url.searchParams.set('_v', Date.now().toString());
+          window.location.replace(url.toString());
+        } catch (e) {
+          window.location.reload();
+        }
+      });
+    </script>
+  </head>
+  <body class="bg-[#0b0f19] text-slate-100 antialiased selection:bg-emerald-500 selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
