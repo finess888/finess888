@@ -15,43 +15,49 @@ import { Line } from "react-chartjs-2"
 import { formatThaiDate } from "@/lib/utils"
 
 interface WeightTrackerViewProps {
-  weightLogs: any[]
+  healthLogs: any[]
   onOpenAddWeight: () => void
 }
 
 export function WeightTrackerView({
-  weightLogs,
+  healthLogs,
   onOpenAddWeight,
 }: WeightTrackerViewProps) {
-  // Sort by date ascending for charts
-  const sortedLogs = [...weightLogs].sort((a, b) => {
-    const da = new Date(a.Date || a.date).getTime()
-    const db = new Date(b.Date || b.date).getTime()
-    return da - db
+  const [selectedPerson, setSelectedPerson] = React.useState<"ฝ่ายชาย" | "ฝ่ายหญิง">("ฝ่ายชาย")
+  const isMale = selectedPerson === "ฝ่ายชาย"
+
+  const targetWeight = isMale ? 70.0 : 50.0
+  const startWeight = isMale ? 100.0 : 65.0
+
+  // Filter logs with weight
+  const logsWithWeight = healthLogs.filter((log) => {
+    const w = isMale ? log.maleWeight : log.femaleWeight
+    return w !== null && w !== undefined && w !== "" && !isNaN(Number(w))
   })
 
-  const latestLog = sortedLogs.length > 0 ? sortedLogs[sortedLogs.length - 1] : null
-  const firstLog = sortedLogs.length > 0 ? sortedLogs[0] : null
-
-  // Weight change
-  let weightChange = 0
-  if (latestLog && firstLog) {
-    weightChange = Number(latestLog.Weight || latestLog.weight) - Number(firstLog.Weight || firstLog.weight)
-  }
+  const latestLog = logsWithWeight.length > 0 ? logsWithWeight[logsWithWeight.length - 1] : null
+  const currentWeight = latestLog ? Number(isMale ? latestLog.maleWeight : latestLog.femaleWeight) : startWeight
+  const diffFromTarget = currentWeight - targetWeight
 
   // Chart data
-  const chartLabels = sortedLogs.map((log) => formatThaiDate(log.Date || log.date))
+  const chartLabels = (logsWithWeight.length > 0 ? logsWithWeight : healthLogs.slice(0, 14)).map((log) => {
+    return formatThaiDate(log.date)
+  })
+
   const chartData = {
-    labels: chartLabels.length > 0 ? chartLabels : ["ยังไม่มีข้อมูล"],
+    labels: chartLabels,
     datasets: [
       {
-        label: "น้ำหนัก (kg)",
-        data: sortedLogs.map((log) => Number(log.Weight || log.weight || 0)),
-        borderColor: "#10b981",
-        backgroundColor: "rgba(16, 185, 129, 0.15)",
+        label: `น้ำหนัก ${selectedPerson} (กก.)`,
+        data: (logsWithWeight.length > 0 ? logsWithWeight : healthLogs.slice(0, 14)).map((log) => {
+          const w = isMale ? log.maleWeight : log.femaleWeight
+          return w !== null && w !== undefined && w !== "" ? Number(w) : null
+        }),
+        borderColor: isMale ? "#10b981" : "#ec4899",
+        backgroundColor: isMale ? "rgba(16, 185, 129, 0.15)" : "rgba(236, 72, 153, 0.15)",
         fill: true,
         tension: 0.3,
-        pointBackgroundColor: "#10b981",
+        pointBackgroundColor: isMale ? "#10b981" : "#ec4899",
         pointRadius: 4,
       },
     ],
@@ -59,74 +65,81 @@ export function WeightTrackerView({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header & Toggle */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <span>⚖️</span> บันทึกน้ำหนักและสัดส่วน (Weight & Progress)
+            <span>⚖️</span> บันทึกน้ำหนักและสุขภาพรายวัน (Health & Weight)
           </h1>
           <p className="text-slate-400 text-sm">
-            ติดตามการเปลี่ยนแปลงของน้ำหนักตัว เปอร์เซ็นต์ไขมัน และมวลกล้ามเนื้อ บันทึกลง Google Sheets
+            ติดตามน้ำหนักและสุขภาพตามแผน 46 วัน (16 พ.ย. - 31 ธ.ค. 2026) เชื่อมต่อ Google Sheets
           </p>
         </div>
-        <Button
-          onClick={onOpenAddWeight}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium flex items-center gap-2 shadow-lg shadow-emerald-950"
-        >
-          <Plus className="h-4 w-4" />
-          + บันทึกน้ำหนักวันนี้
-        </Button>
+
+        <div className="flex items-center gap-2 bg-[#151d2f] p-1.5 rounded-xl border border-[#26334d]">
+          <button
+            onClick={() => setSelectedPerson("ฝ่ายชาย")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              isMale
+                ? "bg-emerald-600 text-white shadow-md shadow-emerald-950"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <span>🏋️‍♂️</span> ฝ่ายชาย (เป้า 70 kg)
+          </button>
+          <button
+            onClick={() => setSelectedPerson("ฝ่ายหญิง")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              !isMale
+                ? "bg-pink-600 text-white shadow-md shadow-pink-950"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <span>🧘‍♀️</span> ฝ่ายหญิง (เป้า 50 kg)
+          </button>
+        </div>
       </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="bg-[#151d2f] border-[#26334d]">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-slate-400">น้ำหนักปัจจุบัน</CardTitle>
+            <CardTitle className="text-xs font-medium text-slate-400">น้ำหนักปัจจุบัน ({selectedPerson})</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-white">
-              {latestLog ? `${latestLog.Weight || latestLog.weight} kg` : "-"}
+              {currentWeight} <span className="text-sm font-normal text-slate-400">กก.</span>
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              {latestLog ? `อัปเดตเมื่อ ${formatThaiDate(latestLog.Date || latestLog.date)}` : "ยังไม่มีข้อมูล"}
+              น้ำหนักเริ่มต้น: {startWeight} กก.
             </p>
           </CardContent>
         </Card>
 
         <Card className="bg-[#151d2f] border-[#26334d]">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-slate-400">การเปลี่ยนแปลงสุทธิ</CardTitle>
+            <CardTitle className="text-xs font-medium text-slate-400">เป้าหมายน้ำหนัก</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className={`text-3xl font-bold flex items-center gap-1 ${
-              weightChange < 0 ? "text-emerald-400" : weightChange > 0 ? "text-amber-400" : "text-white"
-            }`}>
-              {weightChange !== 0 ? (
-                <>
-                  {weightChange > 0 ? `+${weightChange.toFixed(1)}` : weightChange.toFixed(1)} kg
-                  {weightChange < 0 ? <TrendingDown className="h-6 w-6" /> : <TrendingUp className="h-6 w-6" />}
-                </>
-              ) : (
-                "0.0 kg"
-              )}
+            <div className={`text-3xl font-bold flex items-center gap-1 ${isMale ? "text-emerald-400" : "text-pink-400"}`}>
+              {targetWeight} <span className="text-sm font-normal text-slate-400">กก.</span>
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              เทียบกับวันแรกที่เริ่มบันทึก
+              เป้าหมายลดอีก: {Math.max(0, diffFromTarget).toFixed(1)} กก.
             </p>
           </CardContent>
         </Card>
 
         <Card className="bg-[#151d2f] border-[#26334d]">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-slate-400">% ไขมัน / กล้ามเนื้อ</CardTitle>
+            <CardTitle className="text-xs font-medium text-slate-400">ระยะเวลาติดตามแผน</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-cyan-400">
-              {latestLog?.BodyFat || latestLog?.bodyfat ? `${latestLog.BodyFat || latestLog.bodyfat}%` : "-"}
+              46 <span className="text-sm font-normal text-slate-400">วัน</span>
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              กล้ามเนื้อ: {latestLog?.MuscleMass || latestLog?.musclemass ? `${latestLog.MuscleMass || latestLog.musclemass} kg` : "-"}
+              16 พ.ย. ถึง 31 ธ.ค. 2026
             </p>
           </CardContent>
         </Card>
@@ -135,9 +148,9 @@ export function WeightTrackerView({
       {/* Weight Chart */}
       <Card className="bg-[#151d2f] border-[#26334d]">
         <CardHeader>
-          <CardTitle className="text-base font-semibold text-white">กราฟแนวโน้มน้ำหนักตัว</CardTitle>
+          <CardTitle className="text-base font-semibold text-white">กราฟแนวโน้มน้ำหนัก ({selectedPerson})</CardTitle>
           <CardDescription className="text-slate-400 text-xs">
-            ทิศทางการเปลี่ยนแปลงตามช่วงเวลา
+            ทิศทางการเปลี่ยนแปลงน้ำหนักตัวตามแผนโภชนาการ
           </CardDescription>
         </CardHeader>
         <CardContent className="h-72 pt-2">
@@ -156,63 +169,84 @@ export function WeightTrackerView({
                   ticks: { color: "#94a3b8" },
                 },
               },
-              plugins: {
-                legend: { display: false },
-              },
+              plugins: { legend: { display: false } },
             }}
           />
         </CardContent>
       </Card>
 
-      {/* Logs Table */}
+      {/* Daily Health Log Table */}
       <Card className="bg-[#151d2f] border-[#26334d] overflow-hidden">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold text-white">ประวัติการชั่งน้ำหนัก</CardTitle>
+          <CardTitle className="text-base font-semibold text-white">ตารางสรุปสุขภาพรายวัน (B หน้าจดบันทึก)</CardTitle>
+          <CardDescription className="text-slate-400 text-xs">
+            ข้อมูลสุขภาพและกิจกรรมตลอด 46 วัน
+          </CardDescription>
         </CardHeader>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[450px]">
           <Table>
-            <TableHeader className="bg-[#0e1422] border-b border-[#26334d]">
+            <TableHeader className="bg-[#0e1422] border-b border-[#26334d] sticky top-0">
               <TableRow className="border-[#26334d]">
                 <TableHead className="text-slate-300">วันที่</TableHead>
-                <TableHead className="text-right text-emerald-400 font-semibold">น้ำหนักตัว (kg)</TableHead>
-                <TableHead className="text-right text-amber-300">% ไขมัน</TableHead>
-                <TableHead className="text-right text-cyan-300">มวลกล้ามเนื้อ (kg)</TableHead>
-                <TableHead className="text-slate-300">บันทึกเพิ่มเติม</TableHead>
+                <TableHead className="text-slate-300">วัน</TableHead>
+                <TableHead className="text-slate-300">ประเภทวัน</TableHead>
+                <TableHead className="text-right text-emerald-400 font-semibold">🏋️ ชาย นน. (กก.)</TableHead>
+                <TableHead className="text-right text-emerald-300">🏋️ ชาย แคลอรี่</TableHead>
+                <TableHead className="text-right text-pink-400 font-semibold">🧘 หญิง นน. (กก.)</TableHead>
+                <TableHead className="text-right text-pink-300">🧘 หญิง แคลอรี่</TableHead>
+                <TableHead className="text-slate-300">กิจกรรม / บันทึกสุขภาพ</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedLogs.length === 0 ? (
+              {healthLogs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-slate-400">
-                    ยังไม่มีข้อมูลประวัติน้ำหนัก คลิก "+ บันทึกน้ำหนักวันนี้" เพื่อเริ่มบันทึก
+                  <TableCell colSpan={8} className="text-center py-8 text-slate-400">
+                    ไม่มีข้อมูลสุขภาพในชีต
                   </TableCell>
                 </TableRow>
               ) : (
-                [...sortedLogs].reverse().map((log) => {
-                  const id = log.ID || log.id
-                  return (
-                    <TableRow
-                      key={id}
-                      className="border-[#26334d] hover:bg-slate-800/40 transition-colors"
-                    >
-                      <TableCell className="font-medium text-white whitespace-nowrap">
-                        {formatThaiDate(log.Date || log.date)}
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-emerald-400 text-sm whitespace-nowrap">
-                        {log.Weight || log.weight} kg
-                      </TableCell>
-                      <TableCell className="text-right text-slate-300 text-xs whitespace-nowrap">
-                        {log.BodyFat || log.bodyfat ? `${log.BodyFat || log.bodyfat}%` : "-"}
-                      </TableCell>
-                      <TableCell className="text-right text-slate-300 text-xs whitespace-nowrap">
-                        {log.MuscleMass || log.musclemass ? `${log.MuscleMass || log.musclemass} kg` : "-"}
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-400 max-w-[200px] truncate">
-                        {log.Notes || log.notes || "-"}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })
+                healthLogs.map((log, idx) => (
+                  <TableRow
+                    key={idx}
+                    className="border-[#26334d] hover:bg-slate-800/40 transition-colors"
+                  >
+                    <TableCell className="font-medium text-white whitespace-nowrap text-xs">
+                      {formatThaiDate(log.date)}
+                    </TableCell>
+                    <TableCell className="text-slate-300 text-xs whitespace-nowrap">
+                      {log.dayName || "-"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="secondary"
+                        className={`text-[10px] ${
+                          log.dayType === "ออกกำลังกาย"
+                            ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                            : log.dayType === "วันพักผ่อน"
+                            ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
+                            : "bg-slate-800 text-slate-300"
+                        }`}
+                      >
+                        {log.dayType || "วันปกติ"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-bold text-emerald-400 text-xs whitespace-nowrap">
+                      {log.maleWeight ? `${log.maleWeight} kg` : "-"}
+                    </TableCell>
+                    <TableCell className="text-right text-slate-300 text-xs whitespace-nowrap">
+                      {log.maleCalories ? `${log.maleCalories} kcal` : "-"}
+                    </TableCell>
+                    <TableCell className="text-right font-bold text-pink-400 text-xs whitespace-nowrap">
+                      {log.femaleWeight ? `${log.femaleWeight} kg` : "-"}
+                    </TableCell>
+                    <TableCell className="text-right text-slate-300 text-xs whitespace-nowrap">
+                      {log.femaleCalories ? `${log.femaleCalories} kcal` : "-"}
+                    </TableCell>
+                    <TableCell className="text-xs text-slate-400 max-w-[200px] truncate">
+                      {log.activity || "-"}
+                    </TableCell>
+                  </TableRow>
+                ))
               )}
             </TableBody>
           </Table>

@@ -6,25 +6,12 @@
 
 const SPREADSHEET_ID = '1yP5DwepfHxGoP0_OYx3zTXZTEdijbIt0aQj_1wTPuGs';
 
-// Default sheet names
-const SHEET_MEAL_PLAN = 'MealPlan';
-const SHEET_FOOD_DB = 'FoodDatabase';
-const SHEET_WEIGHT_LOG = 'WeightLog';
+const SHEET_FOOD_DB = 'A หน้าเก็บเมนูอาหาร';
+const SHEET_DAILY_LOG = 'B หน้าจดบันทึก';
+const SHEET_DASHBOARD = 'C หน้าแสดงผลลัพธ์รายวัน';
 
 function getSpreadsheet() {
   return SpreadsheetApp.openById(SPREADSHEET_ID);
-}
-
-function getOrInitSheet(ss, name, defaultHeaders) {
-  let sheet = ss.getSheetByName(name);
-  if (!sheet) {
-    sheet = ss.insertSheet(name);
-    if (defaultHeaders && defaultHeaders.length > 0) {
-      sheet.appendRow(defaultHeaders);
-      sheet.getRange(1, 1, 1, defaultHeaders.length).setFontWeight('bold');
-    }
-  }
-  return sheet;
 }
 
 function doGet(e) {
@@ -90,7 +77,7 @@ function doPost(e) {
       });
     }
 
-    // 2. Validate passcode for other actions
+    // 2. Passcode verification
     const configuredPasscode = PropertiesService.getScriptProperties().getProperty('APP_PASSCODE') || '1234';
     if (configuredPasscode && configuredPasscode !== 'NONE') {
       const reqPass = String(passcode || '').trim();
@@ -111,28 +98,12 @@ function doPost(e) {
         result = handleGetInitialData(ss);
         break;
       }
-      case 'GET_RAW_SHEETS': {
-        result = handleGetRawSheets(ss);
-        break;
-      }
       case 'ADD_MEAL': {
         result = handleAddMeal(ss, payload);
         break;
       }
-      case 'UPDATE_MEAL_STATUS': {
-        result = handleUpdateMealStatus(ss, payload);
-        break;
-      }
-      case 'DELETE_MEAL': {
-        result = handleDeleteMeal(ss, payload);
-        break;
-      }
       case 'ADD_FOOD_ITEM': {
         result = handleAddFoodItem(ss, payload);
-        break;
-      }
-      case 'ADD_WEIGHT_LOG': {
-        result = handleAddWeightLog(ss, payload);
         break;
       }
       case 'SAVE_SETTINGS': {
@@ -152,35 +123,107 @@ function doPost(e) {
   }
 }
 
-function handleGetRawSheets(ss) {
-  const sheets = ss.getSheets();
-  return sheets.map(s => {
-    const lastRow = s.getLastRow();
-    const lastCol = s.getLastColumn();
-    let rows = [];
-    if (lastRow > 0 && lastCol > 0) {
-      rows = s.getRange(1, 1, lastRow, lastCol).getValues();
-    }
-    return {
-      name: s.getName(),
-      id: s.getSheetId(),
-      rows: rows
-    };
-  });
-}
-
 function handleGetInitialData(ss) {
-  // 1. Check all existing sheets in user's spreadsheet
-  const allSheets = ss.getSheets();
-  const rawSheetsData = allSheets.map(s => {
+  // 1. Food Database from 'A หน้าเก็บเมนูอาหาร'
+  const foods = [];
+  const foodSheet = ss.getSheetByName(SHEET_FOOD_DB) || ss.getSheets()[0];
+  if (foodSheet && foodSheet.getLastRow() >= 4) {
+    const data = foodSheet.getRange(4, 1, foodSheet.getLastRow() - 3, Math.min(foodSheet.getLastColumn(), 10)).getValues();
+    data.forEach((row, i) => {
+      if (row[2] && String(row[2]).trim() !== '') {
+        foods.push({
+          id: String(row[0] || 'F-' + (i + 1)),
+          code: String(row[0] || ''),
+          category: String(row[1] || 'ทั่วไป'),
+          name: String(row[2] || ''),
+          servingSize: String(row[3] || '1 เสิร์ฟ'),
+          calories: Number(row[4] || 0),
+          protein: Number(row[5] || 0),
+          carbs: Number(row[6] || 0),
+          fat: Number(row[7] || 0),
+          targetGroup: String(row[8] || 'ทั้งคู่'),
+          notes: String(row[9] || '')
+        });
+      }
+    });
+  }
+
+  // 2. Meals & Daily Summaries from 'B หน้าจดบันทึก'
+  const meals = [];
+  const healthLogs = [];
+  const logSheet = ss.getSheetByName(SHEET_DAILY_LOG) || ss.getSheets()[1];
+  if (logSheet && logSheet.getLastRow() >= 4) {
+    const lastRow = logSheet.getLastRow();
+    const lastCol = logSheet.getLastColumn();
+    const fullData = logSheet.getRange(4, 1, lastRow - 3, lastCol).getValues();
+
+    fullData.forEach((row, idx) => {
+      // Left side: Meals (Cols A-J -> 0-9)
+      const mealName = row[3];
+      if (mealName && String(mealName).trim() !== '') {
+        const rawDate = row[0];
+        let dateStr = '';
+        if (rawDate instanceof Date) {
+          dateStr = Utilities.formatDate(rawDate, 'Asia/Bangkok', 'yyyy-MM-dd');
+        } else if (rawDate) {
+          dateStr = String(rawDate).split('T')[0];
+        }
+
+        meals.push({
+          id: 'M-' + (idx + 4),
+          rowNumber: idx + 4,
+          date: dateStr,
+          person: String(row[1] || 'ฝ่ายชาย').trim(), // ฝ่ายชาย / ฝ่ายหญิง
+          mealType: String(row[2] || '01. มื้อเช้า').trim(),
+          foodName: String(row[3] || '').trim(),
+          servings: Number(row[4] || 1),
+          calories: Number(row[5] || 0),
+          protein: Number(row[6] || 0),
+          carbs: Number(row[7] || 0),
+          fat: Number(row[8] || 0),
+          notes: String(row[9] || ''),
+          status: 'กินแล้ว'
+        });
+      }
+
+      // Right side: Health & Weight Log (Cols L-U -> 11-20)
+      if (row.length > 11 && row[11]) {
+        const rawDate = row[11];
+        let dateStr = '';
+        if (rawDate instanceof Date) {
+          dateStr = Utilities.formatDate(rawDate, 'Asia/Bangkok', 'yyyy-MM-dd');
+        } else if (rawDate) {
+          dateStr = String(rawDate).split('T')[0];
+        }
+
+        if (dateStr) {
+          healthLogs.push({
+            date: dateStr,
+            dayName: String(row[12] || ''),
+            dayType: String(row[13] || 'วันปกติ'),
+            maleWeight: row[14] !== '' ? Number(row[14]) : null,
+            maleCalories: row[15] !== '' ? Number(row[15]) : null,
+            maleProtein: row[16] !== '' ? Number(row[16]) : null,
+            femaleWeight: row[17] !== '' ? Number(row[17]) : null,
+            femaleCalories: row[18] !== '' ? Number(row[18]) : null,
+            femaleProtein: row[19] !== '' ? Number(row[19]) : null,
+            activity: String(row[20] || '')
+          });
+        }
+      }
+    });
+  }
+
+  // 3. Raw sheets metadata
+  const rawSheets = ss.getSheets().map(s => {
     const lr = s.getLastRow();
     const lc = s.getLastColumn();
-    let headers = [];
     let rows = [];
+    let headers = [];
     if (lr > 0 && lc > 0) {
-      const data = s.getRange(1, 1, lr, lc).getValues();
-      headers = data[0] || [];
-      rows = data.slice(1);
+      const d = s.getRange(1, 1, Math.min(lr, 100), lc).getValues();
+      headers = d[2] || d[0] || [];
+      rows = d.slice(3);
     }
     return {
       name: s.getName(),
@@ -190,185 +233,78 @@ function handleGetInitialData(ss) {
     };
   });
 
-  // 2. Meal Plan sheet
-  const mealSheet = getOrInitSheet(ss, SHEET_MEAL_PLAN, [
-    'ID', 'Date', 'DayOfWeek', 'MealType', 'FoodName', 'Portion', 'Calories', 'Protein', 'Carbs', 'Fat', 'Status', 'Notes', 'CreatedAt'
-  ]);
-  const mealData = readSheetAsObjects(mealSheet);
-
-  // 3. Food Database sheet
-  const foodSheet = getOrInitSheet(ss, SHEET_FOOD_DB, [
-    'ID', 'Name', 'Category', 'ServingSize', 'Calories', 'Protein', 'Carbs', 'Fat', 'Fiber', 'Notes'
-  ]);
-  let foodData = readSheetAsObjects(foodSheet);
-
-  // Seed standard Thai healthy foods if empty
-  if (foodData.length === 0) {
-    seedDefaultFoods(foodSheet);
-    foodData = readSheetAsObjects(foodSheet);
-  }
-
-  // 4. Weight Log sheet
-  const weightSheet = getOrInitSheet(ss, SHEET_WEIGHT_LOG, [
-    'ID', 'Date', 'Weight', 'BodyFat', 'MuscleMass', 'Notes', 'CreatedAt'
-  ]);
-  const weightData = readSheetAsObjects(weightSheet);
-
   return {
     spreadsheetName: ss.getName(),
-    meals: mealData,
-    foods: foodData,
-    weightLogs: weightData,
-    rawSheets: rawSheetsData
+    foods: foods,
+    meals: meals,
+    healthLogs: healthLogs,
+    rawSheets: rawSheets,
+    targets: {
+      male: { calories: 2000, protein: 160, carbs: 210, fat: 60, targetWeight: 70 },
+      female: { calories: 1400, protein: 104, carbs: 130, fat: 40, targetWeight: 50 }
+    }
   };
 }
 
 function handleAddMeal(ss, payload) {
-  const mealSheet = getOrInitSheet(ss, SHEET_MEAL_PLAN, [
-    'ID', 'Date', 'DayOfWeek', 'MealType', 'FoodName', 'Portion', 'Calories', 'Protein', 'Carbs', 'Fat', 'Status', 'Notes', 'CreatedAt'
-  ]);
+  const logSheet = ss.getSheetByName(SHEET_DAILY_LOG) || ss.getSheets()[1];
+  const lastRow = logSheet.getLastRow();
 
-  const id = 'M-' + Date.now();
-  const date = payload.date || Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd');
-  const dayOfWeek = payload.dayOfWeek || getThaiDayName(new Date(date));
-  const mealType = payload.mealType || 'มื้อเช้า';
+  // Find next empty row in Column D (Food Name)
+  let targetRow = lastRow + 1;
+  const colD = logSheet.getRange(4, 4, Math.max(1, lastRow - 3), 1).getValues();
+  for (let i = 0; i < colD.length; i++) {
+    if (!colD[i][0] || String(colD[i][0]).trim() === '') {
+      targetRow = i + 4;
+      break;
+    }
+  }
+
+  const dateVal = payload.date ? new Date(payload.date) : new Date();
+  const person = payload.person || 'ฝ่ายชาย';
+  const mealType = payload.mealType || '01. มื้อเช้า';
   const foodName = payload.foodName || '-';
-  const portion = payload.portion || '1 จาน';
+  const servings = Number(payload.servings || 1);
   const calories = Number(payload.calories || 0);
   const protein = Number(payload.protein || 0);
   const carbs = Number(payload.carbs || 0);
   const fat = Number(payload.fat || 0);
-  const status = payload.status || 'ยังไม่ได้กิน';
   const notes = payload.notes || '';
-  const createdAt = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss');
 
-  mealSheet.appendRow([
-    id, date, dayOfWeek, mealType, foodName, portion, calories, protein, carbs, fat, status, notes, createdAt
-  ]);
+  logSheet.getRange(targetRow, 1, 1, 10).setValues([[
+    dateVal, person, mealType, foodName, servings, calories, protein, carbs, fat, notes
+  ]]);
 
   return {
-    id, date, dayOfWeek, mealType, foodName, portion, calories, protein, carbs, fat, status, notes, createdAt
+    success: true,
+    rowNumber: targetRow,
+    meal: { date: payload.date, person, mealType, foodName, servings, calories, protein, carbs, fat, notes }
   };
 }
 
-function handleUpdateMealStatus(ss, payload) {
-  const mealSheet = getOrInitSheet(ss, SHEET_MEAL_PLAN);
-  const data = mealSheet.getDataRange().getValues();
-  if (data.length <= 1) return { updated: false };
-
-  const idCol = 0;
-  const statusCol = 10; // 0-based for Status column
-
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][idCol]) === String(payload.id)) {
-      mealSheet.getRange(i + 1, statusCol + 1).setValue(payload.status);
-      return { updated: true, id: payload.id, status: payload.status };
-    }
-  }
-  return { updated: false };
-}
-
-function handleDeleteMeal(ss, payload) {
-  const mealSheet = getOrInitSheet(ss, SHEET_MEAL_PLAN);
-  const data = mealSheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(payload.id)) {
-      mealSheet.deleteRow(i + 1);
-      return { deleted: true, id: payload.id };
-    }
-  }
-  return { deleted: false };
-}
-
 function handleAddFoodItem(ss, payload) {
-  const foodSheet = getOrInitSheet(ss, SHEET_FOOD_DB, [
-    'ID', 'Name', 'Category', 'ServingSize', 'Calories', 'Protein', 'Carbs', 'Fat', 'Fiber', 'Notes'
-  ]);
+  const foodSheet = ss.getSheetByName(SHEET_FOOD_DB) || ss.getSheets()[0];
+  const lastRow = foodSheet.getLastRow();
 
-  const id = 'F-' + Date.now();
-  const name = payload.name || '-';
+  const code = payload.code || ('M' + String(lastRow - 2).padStart(2, '0'));
   const category = payload.category || 'ทั่วไป';
-  const servingSize = payload.servingSize || '100g';
+  const name = payload.name || '-';
+  const servingSize = payload.servingSize || '1 เสิร์ฟ';
   const calories = Number(payload.calories || 0);
   const protein = Number(payload.protein || 0);
   const carbs = Number(payload.carbs || 0);
   const fat = Number(payload.fat || 0);
-  const fiber = Number(payload.fiber || 0);
+  const targetGroup = payload.targetGroup || 'ทั้งคู่';
   const notes = payload.notes || '';
 
   foodSheet.appendRow([
-    id, name, category, servingSize, calories, protein, carbs, fat, fiber, notes
+    code, category, name, servingSize, calories, protein, carbs, fat, targetGroup, notes
   ]);
 
-  return { id, name, category, servingSize, calories, protein, carbs, fat, fiber, notes };
-}
-
-function handleAddWeightLog(ss, payload) {
-  const weightSheet = getOrInitSheet(ss, SHEET_WEIGHT_LOG, [
-    'ID', 'Date', 'Weight', 'BodyFat', 'MuscleMass', 'Notes', 'CreatedAt'
-  ]);
-
-  const id = 'W-' + Date.now();
-  const date = payload.date || Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd');
-  const weight = Number(payload.weight || 0);
-  const bodyFat = payload.bodyFat ? Number(payload.bodyFat) : '';
-  const muscleMass = payload.muscleMass ? Number(payload.muscleMass) : '';
-  const notes = payload.notes || '';
-  const createdAt = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss');
-
-  weightSheet.appendRow([
-    id, date, weight, bodyFat, muscleMass, notes, createdAt
-  ]);
-
-  return { id, date, weight, bodyFat, muscleMass, notes, createdAt };
-}
-
-function readSheetAsObjects(sheet) {
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
-  if (lastRow <= 1 || lastCol === 0) return [];
-
-  const values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-  const headers = values[0].map(h => String(h || '').trim());
-  const rows = values.slice(1);
-
-  return rows.map(row => {
-    const obj = {};
-    headers.forEach((h, idx) => {
-      if (h) {
-        obj[h] = row[idx];
-        obj[h.toLowerCase()] = row[idx];
-      }
-    });
-    return obj;
-  });
-}
-
-function seedDefaultFoods(sheet) {
-  const defaults = [
-    ['F-1', 'อกไก่ต้ม/นึ่ง', 'โปรตีน', '100g', 165, 31, 0, 3.6, 0, 'แหล่งโปรตีนไขมันต่ำ'],
-    ['F-2', 'ไข่ไก่ทั้งฟอง (ต้ม)', 'โปรตีน', '1 ฟอง (50g)', 72, 6.3, 0.4, 4.8, 0, 'ไข่ต้มสุก'],
-    ['F-3', 'ไข่ขาวต้ม', 'โปรตีน', '1 ฟอง (33g)', 17, 3.6, 0.2, 0.1, 0, 'โปรตีนบริสุทธิ์'],
-    ['F-4', 'สันในหมูย่าง', 'โปรตีน', '100g', 143, 26, 0, 3.5, 0, 'ไขมันต่ำ'],
-    ['F-5', 'ปลาแซลมอนย่าง', 'โปรตีน/ไขมันดี', '100g', 208, 20, 0, 13, 0, 'มี Omega-3 สูง'],
-    ['F-6', 'ปลาดอลลี่/แพนกาเซียส นึ่ง', 'โปรตีน', '100g', 90, 15, 0, 3, 0, 'ย่อยง่าย'],
-    ['F-7', 'กุ้งลวก', 'โปรตีน', '100g', 99, 24, 0.2, 0.3, 0, 'โปรตีนสูง ไขมันต่ำมาก'],
-    ['F-8', 'ข้าวกล้องสุก', 'คาร์โบไฮเดรต', '1 ทัพพี (100g)', 111, 2.6, 23, 0.9, 1.8, 'คาร์บเชิงซ้อน'],
-    ['F-9', 'ข้าวสวยหอมมะลิสุก', 'คาร์โบไฮเดรต', '1 ทัพพี (100g)', 130, 2.7, 28, 0.3, 0.4, 'ข้าวขาว'],
-    ['F-10', 'มันเทศหวานนึ่ง/เผา', 'คาร์โบไฮเดรต', '100g', 86, 1.6, 20, 0.1, 3, 'ดัชนีน้ำตาลต่ำ'],
-    ['F-11', 'ข้าวโอ๊ตแห้ง', 'คาร์โบไฮเดรต', '40g', 150, 5, 27, 2.5, 4, 'ไฟเบอร์สูง บำรุงหัวใจ'],
-    ['F-12', 'บรอกโคลีลวก', 'ผัก', '100g', 35, 2.4, 7, 0.4, 2.6, 'วิตามินซีและสารต้านอนุมูลอิสระ'],
-    ['F-13', 'เวย์โปรตีน Isolate', 'อาหารเสริม', '1 Scoop (30g)', 120, 25, 1, 1, 0, 'เสริมหลังออกกำลังกาย'],
-    ['F-14', 'นมอัลมอนด์ ไม่หวาน', 'เครื่องดื่ม', '1 กล่อง (180ml)', 30, 1, 1, 2.5, 1, 'แคลอรี่ต่ำมาก'],
-    ['F-15', 'อะโวคาโด', 'ไขมันดี', 'ครึ่งลูก (100g)', 160, 2, 8.5, 14.7, 6.7, 'ไขมันไม่อิ่มตัวเชิงเดี่ยว']
-  ];
-
-  defaults.forEach(row => sheet.appendRow(row));
-}
-
-function getThaiDayName(d) {
-  const days = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
-  return days[d.getDay()] || 'วันจันทร์';
+  return {
+    success: true,
+    food: { code, category, name, servingSize, calories, protein, carbs, fat, targetGroup, notes }
+  };
 }
 
 function createJsonResponse(data) {
@@ -376,23 +312,11 @@ function createJsonResponse(data) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-/**
- * ฟังก์ชันตรวจสอบและขอสิทธิ์ Spreadsheet:
- * รันใน Google Apps Script Editor 1 ครั้งเพื่อให้สิทธิ์
- */
 function inspectSpreadsheet() {
   const ss = getSpreadsheet();
   Logger.log('Spreadsheet Name: ' + ss.getName());
   const sheets = ss.getSheets();
   sheets.forEach(sheet => {
-    Logger.log('--- Sheet: ' + sheet.getName() + ' (ID: ' + sheet.getSheetId() + ', Rows: ' + sheet.getLastRow() + ', Cols: ' + sheet.getLastColumn() + ') ---');
-    if (sheet.getLastRow() > 0 && sheet.getLastColumn() > 0) {
-      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-      Logger.log('Headers: ' + JSON.stringify(headers));
-      if (sheet.getLastRow() > 1) {
-        const sample = sheet.getRange(2, 1, Math.min(sheet.getLastRow() - 1, 3), sheet.getLastColumn()).getValues();
-        Logger.log('Sample rows: ' + JSON.stringify(sample));
-      }
-    }
+    Logger.log('Sheet: ' + sheet.getName() + ' (ID: ' + sheet.getSheetId() + ', Rows: ' + sheet.getLastRow() + ', Cols: ' + sheet.getLastColumn() + ')');
   });
 }

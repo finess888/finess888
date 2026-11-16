@@ -14,6 +14,8 @@ import {
   TrendingUp,
   UtensilsCrossed,
   ArrowRight,
+  User,
+  Users,
 } from "lucide-react"
 import { Doughnut, Bar } from "react-chartjs-2"
 import {
@@ -44,7 +46,9 @@ ChartJS.register(
 interface DashboardViewProps {
   meals: any[]
   foods: any[]
-  weightLogs: any[]
+  healthLogs: any[]
+  selectedPerson: string
+  onSelectPerson: (person: string) => void
   onOpenAddMeal: () => void
   onToggleMealStatus: (id: string, currentStatus: string) => void
   onNavigateToMealPlan: () => void
@@ -53,37 +57,52 @@ interface DashboardViewProps {
 export function DashboardView({
   meals,
   foods,
-  weightLogs,
+  healthLogs,
+  selectedPerson,
+  onSelectPerson,
   onOpenAddMeal,
   onToggleMealStatus,
   onNavigateToMealPlan,
 }: DashboardViewProps) {
-  const todayStr = new Date().toISOString().split("T")[0]
+  const isMale = selectedPerson === "ฝ่ายชาย"
 
-  // Filter today's meals
-  const todayMeals = meals.filter((m) => {
-    const d = String(m.Date || m.date || "").split("T")[0]
-    return d === todayStr
+  // Target macros based on sheet C metadata
+  const TARGET_CALORIES = isMale ? 2000 : 1400
+  const TARGET_PROTEIN = isMale ? 160 : 104
+  const TARGET_CARBS = isMale ? 210 : 130
+  const TARGET_FAT = isMale ? 60 : 40
+  const TARGET_WEIGHT = isMale ? 70.0 : 50.0
+
+  // Filter meals for the selected person
+  const personMeals = meals.filter((m) => {
+    const p = String(m.person || m.Person || "").trim()
+    return p === selectedPerson || p === "ทั้งคู่"
   })
 
-  // Calculate today's totals
-  const totalCalories = todayMeals.reduce((sum, m) => sum + Number(m.Calories || m.calories || 0), 0)
-  const totalProtein = todayMeals.reduce((sum, m) => sum + Number(m.Protein || m.protein || 0), 0)
-  const totalCarbs = todayMeals.reduce((sum, m) => sum + Number(m.Carbs || m.carbs || 0), 0)
-  const totalFat = todayMeals.reduce((sum, m) => sum + Number(m.Fat || m.fat || 0), 0)
+  // Date selection (default today or latest logged date)
+  const todayStr = new Date().toISOString().split("T")[0]
+  // Check if today has meals, or take the latest date from meals
+  const hasTodayMeals = personMeals.some((m) => String(m.date || m.Date || "").split("T")[0] === todayStr)
+  const latestDate = personMeals.length > 0 ? personMeals[personMeals.length - 1].date : todayStr
+  const activeDate = hasTodayMeals ? todayStr : latestDate
 
-  const consumedMealsCount = todayMeals.filter(
-    (m) => (m.Status || m.status) === "กินแล้ว"
-  ).length
+  const activeDateMeals = personMeals.filter((m) => {
+    const d = String(m.date || m.Date || "").split("T")[0]
+    return d === activeDate
+  })
 
-  // Standard targets (default 2000 kcal, 140g protein, 220g carbs, 55g fat)
-  const TARGET_CALORIES = 2000
-  const TARGET_PROTEIN = 140
-  const TARGET_CARBS = 220
-  const TARGET_FAT = 55
+  // Calculate totals for active date
+  const totalCalories = activeDateMeals.reduce((sum, m) => sum + Number(m.calories || m.Calories || 0), 0)
+  const totalProtein = activeDateMeals.reduce((sum, m) => sum + Number(m.protein || m.Protein || 0), 0)
+  const totalCarbs = activeDateMeals.reduce((sum, m) => sum + Number(m.carbs || m.Carbs || 0), 0)
+  const totalFat = activeDateMeals.reduce((sum, m) => sum + Number(m.fat || m.Fat || 0), 0)
 
-  // Latest weight
-  const latestWeight = weightLogs.length > 0 ? weightLogs[weightLogs.length - 1] : null
+  // Find health log for the latest entry
+  const latestHealth = healthLogs.find((h) => (isMale ? h.maleWeight : h.femaleWeight))
+  const currentWeight = isMale ? latestHealth?.maleWeight : latestHealth?.femaleWeight
+
+  // Calorie remaining
+  const calorieDiff = TARGET_CALORIES - totalCalories
 
   // Doughnut Chart Data (Macro Breakdown)
   const macroChartData = {
@@ -119,9 +138,9 @@ export function DashboardView({
   }
 
   const weeklyCalories = last7Days.map((isoDate) => {
-    return meals
-      .filter((m) => String(m.Date || m.date || "").split("T")[0] === isoDate)
-      .reduce((sum, m) => sum + Number(m.Calories || m.calories || 0), 0)
+    return personMeals
+      .filter((m) => String(m.date || m.Date || "").split("T")[0] === isoDate)
+      .reduce((sum, m) => sum + Number(m.calories || m.Calories || 0), 0)
   })
 
   const weeklyBarData = {
@@ -130,8 +149,8 @@ export function DashboardView({
       {
         label: "แคลอรี่ (kcal)",
         data: weeklyCalories,
-        backgroundColor: "rgba(16, 185, 129, 0.6)",
-        borderColor: "#10b981",
+        backgroundColor: isMale ? "rgba(16, 185, 129, 0.6)" : "rgba(236, 72, 153, 0.6)",
+        borderColor: isMale ? "#10b981" : "#ec4899",
         borderRadius: 6,
       },
     ],
@@ -139,25 +158,42 @@ export function DashboardView({
 
   return (
     <div className="space-y-6">
-      {/* Top Banner & Quick Add */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/20 rounded-2xl p-6 shadow-lg">
+      {/* Top Banner & Person Switcher */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-[#151d2f] to-[#151d2f] border border-[#26334d] rounded-2xl p-6 shadow-lg">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-2xl">🥗</span>
-            <h1 className="text-2xl font-bold text-white tracking-tight">ภาพรวมแผนการกินวันนี้</h1>
+            <span className="text-2xl">{isMale ? "🏋️‍♂️" : "🧘‍♀️"}</span>
+            <h1 className="text-2xl font-bold text-white tracking-tight">
+              โภชนาการและแผนสุขภาพ: <span className={isMale ? "text-emerald-400" : "text-pink-400"}>{selectedPerson}</span>
+            </h1>
           </div>
           <p className="text-slate-400 text-sm">
-            จัดการเป้าหมายสารอาหาร แคลอรี่ และติดตามมื้ออาหารประจำวันเชื่อมต่อ Google Sheets แบบเรียลไทม์
+            เป้าหมาย: {TARGET_CALORIES.toLocaleString()} kcal | โปรตีน {TARGET_PROTEIN}g | นน. เป้าหมาย {TARGET_WEIGHT} กก.
           </p>
         </div>
-        <div className="flex items-center gap-2.5">
-          <Button
-            onClick={onOpenAddMeal}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium flex items-center gap-2 shadow-lg shadow-emerald-950"
+
+        {/* Toggle Couple View */}
+        <div className="flex items-center gap-2 bg-[#0b0f19] p-1.5 rounded-xl border border-[#26334d]">
+          <button
+            onClick={() => onSelectPerson("ฝ่ายชาย")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              selectedPerson === "ฝ่ายชาย"
+                ? "bg-emerald-600 text-white shadow-md shadow-emerald-950"
+                : "text-slate-400 hover:text-white"
+            }`}
           >
-            <Plus className="h-4 w-4" />
-            + เพิ่มมื้ออาหาร
-          </Button>
+            <span>🏋️‍♂️</span> ฝ่ายชาย
+          </button>
+          <button
+            onClick={() => onSelectPerson("ฝ่ายหญิง")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              selectedPerson === "ฝ่ายหญิง"
+                ? "bg-pink-600 text-white shadow-md shadow-pink-950"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <span>🧘‍♀️</span> ฝ่ายหญิง
+          </button>
         </div>
       </div>
 
@@ -166,8 +202,8 @@ export function DashboardView({
         {/* Calories Card */}
         <Card className="bg-[#151d2f] border-[#26334d] hover:border-emerald-500/40 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs font-medium text-slate-400">แคลอรี่รวมวันนี้</CardTitle>
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+            <CardTitle className="text-xs font-medium text-slate-400">แคลอรี่วันนี้</CardTitle>
+            <div className={`p-2 rounded-xl ${isMale ? "bg-emerald-500/10 text-emerald-400" : "bg-pink-500/10 text-pink-400"}`}>
               <Flame className="h-4 w-4" />
             </div>
           </CardHeader>
@@ -175,13 +211,16 @@ export function DashboardView({
             <div className="text-2xl font-bold text-white">{totalCalories} <span className="text-xs font-normal text-slate-400">/ {TARGET_CALORIES} kcal</span></div>
             <div className="mt-2 w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
               <div
-                className="bg-emerald-500 h-1.5 rounded-full transition-all"
+                className={`h-1.5 rounded-full transition-all ${isMale ? "bg-emerald-500" : "bg-pink-500"}`}
                 style={{ width: `${Math.min(100, (totalCalories / TARGET_CALORIES) * 100)}%` }}
               />
             </div>
-            <p className="text-xs text-slate-400 mt-2">
-              {Math.round((totalCalories / TARGET_CALORIES) * 100)}% ของเป้าหมายประจำวัน
-            </p>
+            <div className="flex items-center justify-between text-xs text-slate-400 mt-2">
+              <span>{Math.round((totalCalories / TARGET_CALORIES) * 100)}% ของเป้า</span>
+              <span className={calorieDiff >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                {calorieDiff >= 0 ? `เหลือ ${calorieDiff} kcal` : `เกิน ${Math.abs(calorieDiff)} kcal`}
+              </span>
+            </div>
           </CardContent>
         </Card>
 
@@ -259,33 +298,29 @@ export function DashboardView({
           <CardHeader>
             <CardTitle className="text-base font-semibold text-white">สัดส่วนสารอาหารวันนี้ (Macros)</CardTitle>
             <CardDescription className="text-slate-400 text-xs">
-              สัดส่วนโปรตีน / คาร์โบไฮเดรต / ไขมัน
+              สัดส่วนโปรตีน / คาร์บ / ไขมัน ของ {selectedPerson}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center justify-center p-4">
-            <div className="w-48 h-48 relative">
+            <div className="w-44 h-44 relative">
               <Doughnut
                 data={macroChartData}
                 options={{
                   responsive: true,
                   maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      display: false,
-                    },
-                  },
+                  plugins: { legend: { display: false } },
                 }}
               />
             </div>
-            <div className="flex items-center justify-center gap-4 mt-4 text-xs">
+            <div className="flex items-center justify-center gap-3 mt-4 text-xs">
               <span className="flex items-center gap-1.5 text-emerald-400">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> โปรตีน ({totalProtein}g)
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> P: {totalProtein}g
               </span>
               <span className="flex items-center gap-1.5 text-amber-400">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> คาร์บ ({totalCarbs}g)
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> C: {totalCarbs}g
               </span>
               <span className="flex items-center gap-1.5 text-rose-400">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" /> ไขมัน ({totalFat}g)
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" /> F: {totalFat}g
               </span>
             </div>
           </CardContent>
@@ -295,14 +330,14 @@ export function DashboardView({
         <Card className="lg:col-span-2 bg-[#151d2f] border-[#26334d]">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-base font-semibold text-white">แนวโน้มแคลอรี่ 7 วันที่ผ่านมา</CardTitle>
+              <CardTitle className="text-base font-semibold text-white">แคลอรี่ 7 วันล่าสุด ({selectedPerson})</CardTitle>
               <CardDescription className="text-slate-400 text-xs">
-                ปริมาณพลังงานที่ได้รับในแต่ละวัน
+                แนวโน้มการรับประทานอาหารเปรียบเทียบเป้าหมาย {TARGET_CALORIES} kcal
               </CardDescription>
             </div>
-            {latestWeight && (
+            {currentWeight && (
               <Badge variant="outline" className="border-emerald-500/40 text-emerald-400 bg-emerald-500/10">
-                น้ำหนักล่าสุด: {latestWeight.Weight || latestWeight.weight} kg
+                น้ำหนักปัจจุบัน: {currentWeight} kg (เป้า {TARGET_WEIGHT} kg)
               </Badge>
             )}
           </CardHeader>
@@ -322,119 +357,103 @@ export function DashboardView({
                     ticks: { color: "#94a3b8" },
                   },
                 },
-                plugins: {
-                  legend: { display: false },
-                },
+                plugins: { legend: { display: false } },
               }}
             />
           </CardContent>
         </Card>
       </div>
 
-      {/* Today's Meals Timeline / List */}
+      {/* Active Date Meals Timeline */}
       <Card className="bg-[#151d2f] border-[#26334d]">
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>
             <CardTitle className="text-base font-semibold text-white flex items-center gap-2">
               <UtensilsCrossed className="h-4 w-4 text-emerald-400" />
-              มื้ออาหารประจำวันนี้ ({todayMeals.length} รายการ - กินแล้ว {consumedMealsCount})
+              มื้ออาหารประจำวันที่ {activeDate} ({selectedPerson} - {activeDateMeals.length} รายการ)
             </CardTitle>
             <CardDescription className="text-slate-400 text-xs">
-              คลิกที่ไอคอนเพื่อเปลี่ยนสถานะ กินแล้ว / ยังไม่ได้กิน
+              ข้อมูลที่บันทึกไว้ใน Google Sheets (B หน้าจดบันทึก)
             </CardDescription>
           </div>
-          <Button
-            variant="ghost"
-            onClick={onNavigateToMealPlan}
-            className="text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 flex items-center gap-1"
-          >
-            ดูแผนทั้งหมด <ArrowRight className="h-3 w-3" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={onOpenAddMeal}
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs flex items-center gap-1"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              + บันทึกมื้อ
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onNavigateToMealPlan}
+              className="text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 flex items-center gap-1"
+            >
+              ดูแผนทั้งหมด <ArrowRight className="h-3 w-3" />
+            </Button>
+          </div>
         </CardHeader>
 
         <CardContent>
-          {todayMeals.length === 0 ? (
+          {activeDateMeals.length === 0 ? (
             <div className="text-center py-8 border border-dashed border-[#26334d] rounded-xl">
-              <p className="text-slate-400 text-sm">ยังไม่มีมื้ออาหารที่บันทึกไว้สำหรับวันนี้</p>
+              <p className="text-slate-400 text-sm">ยังไม่มีมื้ออาหารที่บันทึกไว้สำหรับ {selectedPerson} ในวันที่ {activeDate}</p>
               <Button
                 onClick={onOpenAddMeal}
                 variant="outline"
                 className="mt-3 text-xs border-[#26334d] text-emerald-400 hover:bg-emerald-500/10"
               >
-                + วางแผนมื้อแรกของวัน
+                + บันทึกมื้ออาหารของวันนี้
               </Button>
             </div>
           ) : (
             <div className="divide-y divide-[#26334d]">
-              {todayMeals.map((meal) => {
-                const id = meal.ID || meal.id
-                const isConsumed = (meal.Status || meal.status) === "กินแล้ว"
+              {activeDateMeals.map((meal) => {
+                const id = meal.id || meal.ID
                 return (
                   <div
                     key={id}
                     className="py-3 flex items-center justify-between gap-4 hover:bg-slate-800/30 px-2 rounded-lg transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => onToggleMealStatus(id, meal.Status || meal.status)}
-                        className="text-slate-400 hover:text-emerald-400 transition-colors"
-                        title="คลิกเพื่อเปลี่ยนสถานะ"
-                      >
-                        {isConsumed ? (
-                          <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-                        ) : (
-                          <Circle className="h-5 w-5 text-slate-500 hover:text-slate-300" />
-                        )}
-                      </button>
+                      <div className="p-1 rounded-full bg-emerald-500/20 text-emerald-400">
+                        <CheckCircle2 className="h-4 w-4" />
+                      </div>
 
                       <div>
                         <div className="flex items-center gap-2">
-                          <span
-                            className={`text-sm font-medium ${
-                              isConsumed ? "text-slate-400 line-through" : "text-white"
-                            }`}
-                          >
-                            {meal.FoodName || meal.foodname}
+                          <span className="text-sm font-medium text-white">
+                            {meal.foodName || meal.FoodName}
                           </span>
                           <Badge
                             variant="secondary"
                             className="text-[10px] bg-slate-800 text-slate-300 border-slate-700"
                           >
-                            {meal.MealType || meal.mealtype}
+                            {meal.mealType || meal.MealType}
                           </Badge>
-                          {meal.Portion && (
-                            <span className="text-xs text-slate-400">({meal.Portion || meal.portion})</span>
+                          {meal.servings && (
+                            <span className="text-xs text-slate-400">({meal.servings} เสิร์ฟ)</span>
                           )}
                         </div>
-                        {meal.Notes && (
-                          <p className="text-xs text-slate-400 mt-0.5">{meal.Notes || meal.notes}</p>
+                        {meal.notes && (
+                          <p className="text-xs text-slate-400 mt-0.5">{meal.notes}</p>
                         )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4 text-right">
-                      <div>
-                        <span className="text-sm font-semibold text-emerald-400">
-                          {meal.Calories || meal.calories} kcal
-                        </span>
-                        <div className="text-[10px] text-slate-400 space-x-1">
-                          <span>P: {meal.Protein || meal.protein}g</span>
-                          <span>•</span>
-                          <span>C: {meal.Carbs || meal.carbs}g</span>
-                          <span>•</span>
-                          <span>F: {meal.Fat || meal.fat}g</span>
-                        </div>
+                    <div className="text-right">
+                      <span className="text-sm font-semibold text-emerald-400">
+                        {meal.calories} kcal
+                      </span>
+                      <div className="text-[10px] text-slate-400 space-x-1">
+                        <span>P: {meal.protein}g</span>
+                        <span>•</span>
+                        <span>C: {meal.carbs}g</span>
+                        <span>•</span>
+                        <span>F: {meal.fat}g</span>
                       </div>
-
-                      <Badge
-                        className={`text-xs ${
-                          isConsumed
-                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                            : "bg-amber-500/20 text-amber-400 border-amber-500/30"
-                        }`}
-                      >
-                        {meal.Status || meal.status || "ยังไม่ได้กิน"}
-                      </Badge>
                     </div>
                   </div>
                 )

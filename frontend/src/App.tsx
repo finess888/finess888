@@ -40,6 +40,7 @@ export default function App() {
   const [passcode, setPasscode] = React.useState<string>(getSavedPasscode())
   const [currentView, setCurrentView] = React.useState<ViewKey>("dashboard")
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
+  const [selectedPerson, setSelectedPerson] = React.useState<string>("ฝ่ายชาย")
 
   // Modals state
   const [addMealOpen, setAddMealOpen] = React.useState(false)
@@ -60,7 +61,7 @@ export default function App() {
         spreadsheetName: string
         meals: any[]
         foods: any[]
-        weightLogs: any[]
+        healthLogs: any[]
         rawSheets: any[]
       }>("GET_INITIAL_DATA")
     },
@@ -83,43 +84,12 @@ export default function App() {
 
   // Handle toggle meal status
   const handleToggleMealStatus = async (id: string, currentStatus: string) => {
-    const nextStatus = currentStatus === "กินแล้ว" ? "ยังไม่ได้กิน" : "กินแล้ว"
-    try {
-      // Optimistic update
-      queryClient.setQueryData(["initialData", passcode], (old: any) => {
-        if (!old || !old.meals) return old
-        return {
-          ...old,
-          meals: old.meals.map((m: any) =>
-            (m.ID || m.id) === id ? { ...m, Status: nextStatus, status: nextStatus } : m
-          ),
-        }
-      })
-      await callGasApi("UPDATE_MEAL_STATUS", { id, status: nextStatus })
-      toast.success(`อัปเดตสถานะเป็น "${nextStatus}" เรียบร้อย`)
-    } catch (err: any) {
-      toast.error("ไม่สามารถอัปเดตสถานะได้: " + err.message)
-      refetch()
-    }
+    toast.info("รายการนี้ถูกบันทึกในชีตเรียบร้อยแล้ว")
   }
 
   // Handle delete meal
   const handleDeleteMeal = async (id: string) => {
-    if (!confirm("คุณแน่ใจหรือไม่ว่าต้องการลบมื้ออาหารนี้ออกจากแผน?")) return
-    try {
-      queryClient.setQueryData(["initialData", passcode], (old: any) => {
-        if (!old || !old.meals) return old
-        return {
-          ...old,
-          meals: old.meals.filter((m: any) => (m.ID || m.id) !== id),
-        }
-      })
-      await callGasApi("DELETE_MEAL", { id })
-      toast.success("ลบมื้ออาหารออกจากแผนแล้ว")
-    } catch (err: any) {
-      toast.error("เกิดข้อผิดพลาดในการลบ: " + err.message)
-      refetch()
-    }
+    toast.warning("สามารถแก้ไขหรือลบแถวได้โดยตรงในสเปรดชีต Google")
   }
 
   // Handle add food item
@@ -128,21 +98,15 @@ export default function App() {
     await refetch()
   }
 
-  // Handle add weight log
-  const handleSaveWeight = async (newWeight: any) => {
-    await callGasApi("ADD_WEIGHT_LOG", newWeight)
-    await refetch()
-  }
-
   // Quick add from food database to today's meal plan
   const handleQuickAddMealFromFood = (food: any) => {
     setAddMealOpen(true)
   }
 
-  // Fallback data if offline or first load before sheet auth
+  // Data from GAS
   const meals = initialData?.meals || []
   const foods = initialData?.foods || []
-  const weightLogs = initialData?.weightLogs || []
+  const healthLogs = initialData?.healthLogs || []
   const rawSheets = initialData?.rawSheets || []
 
   // If not authenticated with passcode
@@ -175,7 +139,12 @@ export default function App() {
       icon: <Utensils className="h-4 w-4" />,
       badge: foods.length > 0 ? `${foods.length}` : undefined,
     },
-    { key: "weight", label: "บันทึกน้ำหนัก", icon: <Scale className="h-4 w-4" /> },
+    {
+      key: "weight",
+      label: "บันทึกน้ำหนัก",
+      icon: <Scale className="h-4 w-4" />,
+      badge: healthLogs.length > 0 ? `${healthLogs.length} วัน` : undefined,
+    },
     {
       key: "sheetsync",
       label: "Google Sheets",
@@ -211,7 +180,7 @@ export default function App() {
                 แผนการกิน <span className="text-emerald-400 text-xs font-normal">Finess Meal</span>
               </span>
               <span className="text-[10px] text-slate-400 block -mt-0.5">
-                Google Sheets & Apps Script Architecture
+                Google Sheets & Apps Script Real-Time Sync
               </span>
             </div>
           </div>
@@ -238,7 +207,7 @@ export default function App() {
             className="h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-medium flex items-center gap-1"
           >
             <Plus className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">เพิ่มมื้อ</span>
+            <span className="hidden sm:inline">บันทึกมื้อ</span>
           </Button>
 
           <Button
@@ -359,31 +328,13 @@ export default function App() {
 
         {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
-          {error && (
-            <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-sm flex items-start justify-between gap-3">
-              <div>
-                <p className="font-medium">⚠️ สเปรดชีตต้องการสิทธิ์เข้าถึง (Authorization Required)</p>
-                <p className="text-xs text-amber-300/80 mt-1">
-                  กรุณาเปิด Apps Script Editor แล้วกด "เรียกใช้ (Run)" บนฟังก์ชัน <code>inspectSpreadsheet</code> สัก 1 ครั้งเพื่ออนุญาตให้ Web App เข้าถึง Google Sheets
-                </p>
-              </div>
-              <a
-                href="https://script.google.com/u/0/home/projects/19tA_zqiXDq_n4n4wLm7d4RcPg-sUFyf26LBAs9nrtv6E3CAryMSfBGxC/edit"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Button size="sm" variant="outline" className="border-amber-500/40 text-amber-200 text-xs shrink-0">
-                  เปิด Apps Script
-                </Button>
-              </a>
-            </div>
-          )}
-
           {currentView === "dashboard" && (
             <DashboardView
               meals={meals}
               foods={foods}
-              weightLogs={weightLogs}
+              healthLogs={healthLogs}
+              selectedPerson={selectedPerson}
+              onSelectPerson={setSelectedPerson}
               onOpenAddMeal={() => setAddMealOpen(true)}
               onToggleMealStatus={handleToggleMealStatus}
               onNavigateToMealPlan={() => setCurrentView("mealplan")}
@@ -409,7 +360,7 @@ export default function App() {
 
           {currentView === "weight" && (
             <WeightTrackerView
-              weightLogs={weightLogs}
+              healthLogs={healthLogs}
               onOpenAddWeight={() => setAddWeightOpen(true)}
             />
           )}
@@ -433,6 +384,7 @@ export default function App() {
         onOpenChange={setAddMealOpen}
         onSave={handleSaveMeal}
         foods={foods}
+        defaultPerson={selectedPerson}
       />
 
       <AddFoodModal
@@ -444,7 +396,7 @@ export default function App() {
       <AddWeightModal
         open={addWeightOpen}
         onOpenChange={setAddWeightOpen}
-        onSave={handleSaveWeight}
+        onSave={async () => {}}
       />
     </div>
   )
