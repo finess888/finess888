@@ -118,6 +118,10 @@ function doPost(e) {
         result = handleAddWeightLog(ss, payload);
         break;
       }
+      case 'ADD_WORKOUT_LOG': {
+        result = handleAddWorkoutLog(ss, payload);
+        break;
+      }
       case 'SAVE_SETTINGS': {
         if (payload.newPasscode) {
           PropertiesService.getScriptProperties().setProperty('APP_PASSCODE', String(payload.newPasscode).trim());
@@ -466,6 +470,71 @@ function handleAddWeightLog(ss, payload) {
     rowValues[20] = notes;
     logSheet.getRange(targetRow, 1, 1, 21).setValues([rowValues]);
     return { success: true, newRow: targetRow, date: dateStr, person, weight };
+  }
+}
+
+function handleAddWorkoutLog(ss, payload) {
+  const logSheet = ss.getSheetByName(SHEET_DAILY_LOG) || ss.getSheets()[1];
+  const lastRow = logSheet.getLastRow();
+  const dateStr = payload.date ? String(payload.date).split('T')[0] : Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd');
+  const person = String(payload.person || 'ฝ่ายชาย').trim();
+  const exerciseName = String(payload.exerciseName || 'ออกกำลังกาย').trim();
+  const duration = Number(payload.durationMinutes || 0);
+  const burnedKcal = Number(payload.burnedCalories || 0);
+  const steps = Number(payload.steps || 0);
+  const notes = String(payload.notes || '').trim();
+
+  let workoutSummary = `[${person}] 🏃 ${exerciseName}`;
+  if (duration > 0 && burnedKcal > 0) {
+    workoutSummary += ` (${duration} นาที, ${burnedKcal} kcal)`;
+  } else if (duration > 0) {
+    workoutSummary += ` (${duration} นาที)`;
+  } else if (burnedKcal > 0) {
+    workoutSummary += ` (${burnedKcal} kcal)`;
+  }
+  if (steps > 0) {
+    workoutSummary += ` | 🚶 เดิน ${steps.toLocaleString()} ก้าว`;
+  }
+  if (notes) {
+    workoutSummary += ` - ${notes}`;
+  }
+
+  // Scan Column L (12 in 1-based) for the matching date
+  let matchedRow = -1;
+  if (lastRow >= 4) {
+    const datesCol = logSheet.getRange(4, 12, lastRow - 3, 1).getValues();
+    for (let i = 0; i < datesCol.length; i++) {
+      let d = datesCol[i][0];
+      let rowDateStr = '';
+      if (d instanceof Date) {
+        rowDateStr = Utilities.formatDate(d, 'Asia/Bangkok', 'yyyy-MM-dd');
+      } else if (d) {
+        rowDateStr = String(d).split('T')[0];
+      }
+      if (rowDateStr === dateStr) {
+        matchedRow = i + 4;
+        break;
+      }
+    }
+  }
+
+  if (matchedRow > 0) {
+    const currentNotes = logSheet.getRange(matchedRow, 21).getValue();
+    const newNotes = currentNotes ? currentNotes + '\n' + workoutSummary : workoutSummary;
+    logSheet.getRange(matchedRow, 21).setValue(newNotes);
+    return { success: true, updatedRow: matchedRow, date: dateStr, person, workoutSummary };
+  } else {
+    const targetRow = lastRow + 1;
+    const dateVal = new Date(dateStr);
+    const dayNames = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+    const dayName = dayNames[dateVal.getDay()] || 'จันทร์';
+    const rowValues = new Array(21).fill('');
+    rowValues[11] = dateVal;
+    rowValues[12] = dayName;
+    rowValues[13] = 'วันปกติ';
+    rowValues[20] = workoutSummary;
+    logSheet.getRange(targetRow, 1, 1, 21).setValues([rowValues]);
+    return { success: true, newRow: targetRow, date: dateStr, person, workoutSummary };
   }
 }
 

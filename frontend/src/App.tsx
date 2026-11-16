@@ -11,11 +11,16 @@ import { DashboardView } from "@/components/views/DashboardView"
 import { MealPlanView } from "@/components/views/MealPlanView"
 import { FoodDatabaseView } from "@/components/views/FoodDatabaseView"
 import { WeightTrackerView } from "@/components/views/WeightTrackerView"
+import { ExerciseDatabaseView } from "@/components/views/ExerciseDatabaseView"
+import { WorkoutTrackerView } from "@/components/views/WorkoutTrackerView"
 import { SheetSyncView } from "@/components/views/SheetSyncView"
 import { SettingsView } from "@/components/views/SettingsView"
 import { AddMealModal } from "@/components/modals/AddMealModal"
 import { AddFoodModal } from "@/components/modals/AddFoodModal"
 import { AddWeightModal } from "@/components/modals/AddWeightModal"
+import { AddWorkoutModal } from "@/components/modals/AddWorkoutModal"
+import { AddStepModal } from "@/components/modals/AddStepModal"
+import { ExerciseItem } from "@/lib/exerciseDatabase"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -23,6 +28,8 @@ import {
   CalendarDays,
   Utensils,
   Scale,
+  Dumbbell,
+  Activity,
   FileSpreadsheet,
   Settings,
   Menu,
@@ -33,7 +40,15 @@ import {
   ExternalLink,
 } from "lucide-react"
 
-type ViewKey = "dashboard" | "mealplan" | "fooddb" | "weight" | "sheetsync" | "settings"
+type ViewKey =
+  | "dashboard"
+  | "mealplan"
+  | "fooddb"
+  | "weight"
+  | "exercisedb"
+  | "workout"
+  | "sheetsync"
+  | "settings"
 
 export default function App() {
   const queryClient = useQueryClient()
@@ -46,6 +61,9 @@ export default function App() {
   const [addMealOpen, setAddMealOpen] = React.useState(false)
   const [addFoodOpen, setAddFoodOpen] = React.useState(false)
   const [addWeightOpen, setAddWeightOpen] = React.useState(false)
+  const [addWorkoutOpen, setAddWorkoutOpen] = React.useState(false)
+  const [addStepOpen, setAddStepOpen] = React.useState(false)
+  const [selectedExerciseForLog, setSelectedExerciseForLog] = React.useState<ExerciseItem | null>(null)
 
   // Fetch initial data from GAS Backend
   const {
@@ -157,6 +175,16 @@ export default function App() {
       label: "บันทึกน้ำหนัก",
       icon: <Scale className="h-4 w-4" />,
       badge: healthLogs.length > 0 ? `${healthLogs.length} วัน` : undefined,
+    },
+    {
+      key: "exercisedb",
+      label: "คลังออกกำลังกาย",
+      icon: <Dumbbell className="h-4 w-4" />,
+    },
+    {
+      key: "workout",
+      label: "บันทึกออกกำลังกาย / ก้าว",
+      icon: <Activity className="h-4 w-4" />,
     },
     {
       key: "sheetsync",
@@ -381,6 +409,30 @@ export default function App() {
             />
           )}
 
+          {currentView === "exercisedb" && (
+            <ExerciseDatabaseView
+              onQuickLogWorkout={(exercise) => {
+                setSelectedExerciseForLog(exercise)
+                setAddWorkoutOpen(true)
+              }}
+              onOpenAddWorkout={() => {
+                setSelectedExerciseForLog(null)
+                setAddWorkoutOpen(true)
+              }}
+            />
+          )}
+
+          {currentView === "workout" && (
+            <WorkoutTrackerView
+              selectedPerson={selectedPerson}
+              onOpenAddWorkout={() => {
+                setSelectedExerciseForLog(null)
+                setAddWorkoutOpen(true)
+              }}
+              onOpenAddStep={() => setAddStepOpen(true)}
+            />
+          )}
+
           {currentView === "sheetsync" && (
             <SheetSyncView
               rawSheets={rawSheets}
@@ -414,6 +466,21 @@ export default function App() {
         onOpenChange={setAddWeightOpen}
         onSave={handleSaveWeight}
         defaultPerson={selectedPerson === "ALL" ? "ฝ่ายชาย" : selectedPerson}
+      />
+
+      <AddWorkoutModal
+        open={addWorkoutOpen}
+        onOpenChange={setAddWorkoutOpen}
+        defaultPerson={selectedPerson === "ALL" ? "ฝ่ายชาย" : selectedPerson}
+        defaultExercise={selectedExerciseForLog}
+        onSaved={() => refetch()}
+      />
+
+      <AddStepModal
+        open={addStepOpen}
+        onOpenChange={setAddStepOpen}
+        defaultPerson={selectedPerson === "ALL" ? "ฝ่ายชาย" : selectedPerson}
+        onSaved={() => refetch()}
       />
     </div>
   )

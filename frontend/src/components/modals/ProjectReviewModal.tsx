@@ -20,6 +20,11 @@ import {
   completeProject,
   analyzeProject,
 } from "@/lib/projectManager"
+import {
+  getWorkoutLogs,
+  getDailyStepLogs,
+  calculateWorkoutStats,
+} from "@/lib/exerciseDatabase"
 import { formatThaiDate } from "@/lib/utils"
 import {
   Target,
@@ -36,6 +41,8 @@ import {
   TrendingDown,
   ArrowRight,
   Lightbulb,
+  Dumbbell,
+  Footprints,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -104,6 +111,31 @@ export function ProjectReviewModal({
   const analysis: ProjectAnalysis | null = currentProject
     ? analyzeProject(currentProject, meals, healthLogs, maintenanceCalories, targetIntakeCalories)
     : null
+
+  const workoutStats = React.useMemo(() => {
+    if (!currentProject) return null
+    const allWorkouts = getWorkoutLogs()
+    const allSteps = getDailyStepLogs()
+
+    // Filter by project person & date range
+    const filteredWorkouts = allWorkouts.filter((w) => {
+      const matchPerson = currentProject.person === "ทั้งคู่" || w.person === currentProject.person
+      const matchDate =
+        (!currentProject.startDate || w.date >= currentProject.startDate) &&
+        (!currentProject.deadlineDate || w.date <= currentProject.deadlineDate)
+      return matchPerson && matchDate
+    })
+
+    const filteredSteps = allSteps.filter((s) => {
+      const matchPerson = currentProject.person === "ทั้งคู่" || s.person === currentProject.person
+      const matchDate =
+        (!currentProject.startDate || s.date >= currentProject.startDate) &&
+        (!currentProject.deadlineDate || s.date <= currentProject.deadlineDate)
+      return matchPerson && matchDate
+    })
+
+    return calculateWorkoutStats(filteredWorkouts, filteredSteps)
+  }, [currentProject, open])
 
   const handleCreateProject = (e: React.FormEvent) => {
     e.preventDefault()
@@ -289,29 +321,72 @@ export function ProjectReviewModal({
                 </div>
               </div>
 
-              {/* Question 2: ออกกำลังกายเป็นยังไง? (Activity Summary) */}
-              <div className="p-3.5 rounded-xl bg-[#0b0f19] border border-[#26334d] space-y-1.5">
+              {/* Question 2: ออกกำลังกายเป็นยังไง? (Activity & Workout Summary) */}
+              <div className="p-3.5 rounded-xl bg-[#0b0f19] border border-[#26334d] space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
                     <Activity className="h-4 w-4 text-emerald-400" />
-                    2. ออกกำลังกายเป็นยังไง?
+                    2. ออกกำลังกายเป็นยังไง? (Workout & Steps)
                   </span>
-                  <Badge className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30 text-[10px]">
-                    บันทึก {analysis.activitiesCount} วัน
+                  <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px]">
+                    {workoutStats && (workoutStats.totalWorkouts > 0 || workoutStats.totalSteps > 0)
+                      ? `${workoutStats.totalWorkouts} ครั้ง • เดินเฉลี่ย ${workoutStats.avgStepsPerDay.toLocaleString()} ก้าว`
+                      : `บันทึกชีต ${analysis.activitiesCount} วัน`}
                   </Badge>
                 </div>
-                <div className="text-xs text-slate-300 space-y-1 pt-1">
-                  <p className="text-[11px] text-slate-400">
-                    {analysis.activitySamples.length > 0
-                      ? `ตัวอย่างบันทึก: ${analysis.activitySamples.join(", ")}`
-                      : "ยังไม่มีบันทึกกิจกรรมในช่วงโปรเจกต์นี้"}
-                  </p>
-                  <div className="flex justify-between pt-1">
-                    <span className="text-slate-400">ความสม่ำเสมอกิจกรรม:</span>
-                    <strong className="text-indigo-300 font-mono">
-                      {Math.round((analysis.activitiesCount / Math.max(1, analysis.daysElapsed)) * 100)}%
-                    </strong>
-                  </div>
+
+                <div className="text-xs text-slate-300 space-y-1.5 pt-1">
+                  {workoutStats && (workoutStats.totalWorkouts > 0 || workoutStats.totalSteps > 0) ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="p-2 rounded-lg bg-[#111726] border border-[#26334d]">
+                          <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                            <Dumbbell className="h-3 w-3 text-emerald-400" />
+                            <span>ออกกำลังกาย</span>
+                          </div>
+                          <span className="text-sm font-bold text-emerald-400 font-mono">
+                            {workoutStats.totalWorkouts} <span className="text-xs font-normal text-slate-400">ครั้ง</span>
+                          </span>
+                          <span className="text-[10px] text-slate-400 block">
+                            รวม {workoutStats.totalWorkoutMinutes} นาที (~{workoutStats.totalWorkoutCalories.toLocaleString()} kcal)
+                          </span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-[#111726] border border-[#26334d]">
+                          <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                            <Footprints className="h-3 w-3 text-indigo-400" />
+                            <span>ก้าวเดินเฉลี่ย</span>
+                          </div>
+                          <span className="text-sm font-bold text-indigo-400 font-mono">
+                            {workoutStats.avgStepsPerDay.toLocaleString()} <span className="text-xs font-normal text-slate-400">ก้าว/วัน</span>
+                          </span>
+                          <span className="text-[10px] text-slate-400 block">
+                            รวม {workoutStats.totalSteps.toLocaleString()} ก้าว (~{workoutStats.totalStepCalories.toLocaleString()} kcal)
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center pt-1 border-t border-[#26334d]">
+                        <span className="text-slate-400">🔥 เผาผลาญจากการออกกำลัง/ก้าวเดิน:</span>
+                        <strong className="text-amber-400 font-mono font-bold">
+                          +{workoutStats.totalCombinedCalories.toLocaleString()} kcal
+                        </strong>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[11px] text-slate-400">
+                        {analysis.activitySamples.length > 0
+                          ? `ตัวอย่างบันทึก: ${analysis.activitySamples.join(", ")}`
+                          : "ยังไม่มีบันทึกกิจกรรมในช่วงโปรเจกต์นี้"}
+                      </p>
+                      <div className="flex justify-between pt-1">
+                        <span className="text-slate-400">ความสม่ำเสมอกิจกรรม:</span>
+                        <strong className="text-indigo-300 font-mono">
+                          {Math.round((analysis.activitiesCount / Math.max(1, analysis.daysElapsed)) * 100)}%
+                        </strong>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
