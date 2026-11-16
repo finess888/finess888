@@ -66,6 +66,44 @@ export default function App() {
   const [selectedExerciseForLog, setSelectedExerciseForLog] = React.useState<ExerciseItem | null>(null)
   const [selectedFoodForMeal, setSelectedFoodForMeal] = React.useState<any>(null)
 
+  // Auto-check for new deployed web bundle on tab focus & interval
+  React.useEffect(() => {
+    const checkAppVersion = async () => {
+      try {
+        const res = await fetch("./?_ts=" + Date.now(), { cache: "no-store" })
+        const html = await res.text()
+        const match = html.match(/src=["']\.\/assets\/(index-[^"']+\.js)["']/)
+        if (match && match[1]) {
+          const loadedScript = document.querySelector('script[src*="index-"]') as HTMLScriptElement
+          if (loadedScript && loadedScript.src && !loadedScript.src.includes(match[1])) {
+            toast.info("✨ มีเวอร์ชันใหม่ (ระบบคูณเสิร์ฟอาหาร) พร้อมใช้งานแล้ว!", {
+              description: "แตะปุ่มนี้เพื่อโหลดเวอร์ชันล่าสุด",
+              action: {
+                label: "🔄 โหลดเวอร์ชันใหม่",
+                onClick: () => {
+                  window.location.reload()
+                },
+              },
+              duration: 30000,
+            })
+          }
+        }
+      } catch (err) {
+        // ignore
+      }
+    }
+
+    const timer = setTimeout(checkAppVersion, 2000)
+    window.addEventListener("focus", checkAppVersion)
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") checkAppVersion()
+    })
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener("focus", checkAppVersion)
+    }
+  }, [])
+
   // Fetch initial data from GAS Backend
   const {
     data: initialData,
@@ -221,6 +259,9 @@ export default function App() {
             <div>
               <span className="font-bold text-base text-white tracking-tight flex items-center gap-1.5">
                 แผนการกิน <span className="text-emerald-400 text-xs font-normal">Finess Meal</span>
+                <Badge className="text-[9px] px-1.5 py-0 bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
+                  v1.2 คูณเสิร์ฟ
+                </Badge>
               </span>
               <span className="text-[10px] text-slate-400 block -mt-0.5">
                 Google Sheets & Apps Script Real-Time Sync

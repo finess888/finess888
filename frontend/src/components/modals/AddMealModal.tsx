@@ -63,10 +63,10 @@ export function AddMealModal({
 
   // Apply food item data
   const applyFoodItem = React.useCallback((f: any, currentServings: number | "") => {
-    const bCal = Number(f.calories || f.Calories || 0)
-    const bProt = Number(f.protein || f.Protein || 0)
-    const bCarb = Number(f.carbs || f.Carbs || 0)
-    const bFat = Number(f.fat || f.Fat || 0)
+    const bCal = parseFloat(String(f.calories || f.Calories || 0)) || 0
+    const bProt = parseFloat(String(f.protein || f.Protein || 0)) || 0
+    const bCarb = parseFloat(String(f.carbs || f.Carbs || 0)) || 0
+    const bFat = parseFloat(String(f.fat || f.Fat || 0)) || 0
 
     setBaseCalories(bCal)
     setBaseProtein(bProt)
@@ -119,18 +119,16 @@ export function AddMealModal({
   const handleServingsChange = (newServings: number | "") => {
     setServings(newServings)
     if (typeof newServings === "number" && newServings > 0) {
-      if (baseCalories !== "") {
-        setCalories(Math.round(Number(baseCalories) * newServings))
-      }
-      if (baseProtein !== "") {
-        setProtein(Number((Number(baseProtein) * newServings).toFixed(1)))
-      }
-      if (baseCarbs !== "") {
-        setCarbs(Number((Number(baseCarbs) * newServings).toFixed(1)))
-      }
-      if (baseFat !== "") {
-        setFat(Number((Number(baseFat) * newServings).toFixed(1)))
-      }
+      const currentServ = typeof servings === "number" && servings > 0 ? servings : 1
+      const bCal = baseCalories !== "" ? Number(baseCalories) : (calories !== "" ? Number(calories) / currentServ : 0)
+      const bProt = baseProtein !== "" ? Number(baseProtein) : (protein !== "" ? Number(protein) / currentServ : 0)
+      const bCarb = baseCarbs !== "" ? Number(baseCarbs) : (carbs !== "" ? Number(carbs) / currentServ : 0)
+      const bFat = baseFat !== "" ? Number(baseFat) : (fat !== "" ? Number(fat) / currentServ : 0)
+
+      setCalories(Math.round(bCal * newServings))
+      setProtein(Number((bProt * newServings).toFixed(1)))
+      setCarbs(Number((bCarb * newServings).toFixed(1)))
+      setFat(Number((bFat * newServings).toFixed(1)))
     }
   }
 
