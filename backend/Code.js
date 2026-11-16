@@ -102,6 +102,10 @@ function doPost(e) {
         result = handleAddMeal(ss, payload);
         break;
       }
+      case 'UPDATE_MEAL': {
+        result = handleUpdateMeal(ss, payload);
+        break;
+      }
       case 'DELETE_MEAL': {
         result = handleDeleteMeal(ss, payload);
         break;
@@ -112,6 +116,10 @@ function doPost(e) {
       }
       case 'ADD_FOOD_ITEM': {
         result = handleAddFoodItem(ss, payload);
+        break;
+      }
+      case 'UPDATE_FOOD_ITEM': {
+        result = handleUpdateFoodItem(ss, payload);
         break;
       }
       case 'DELETE_FOOD_ITEM': {
@@ -304,6 +312,42 @@ function handleAddMeal(ss, payload) {
     rowNumber: targetRow,
     meal: { date: payload.date, person, mealType, foodName, servings, calories, protein, carbs, fat, notes }
   };
+}
+
+function handleUpdateMeal(ss, payload) {
+  const logSheet = ss.getSheetByName(SHEET_DAILY_LOG) || ss.getSheets()[1];
+  const lastRow = logSheet.getLastRow();
+  if (lastRow < 4) return { success: false, message: 'No meals to update' };
+
+  let targetRow = -1;
+  if (payload.id && String(payload.id).startsWith('M-')) {
+    targetRow = parseInt(String(payload.id).replace('M-', ''), 10);
+  } else if (payload.rowNumber) {
+    targetRow = Number(payload.rowNumber);
+  }
+
+  if (targetRow >= 4 && targetRow <= lastRow) {
+    const row = logSheet.getRange(targetRow, 1, 1, 10).getValues()[0];
+    const newFoodName = payload.foodName !== undefined ? payload.foodName : row[3];
+    const newServings = payload.servings !== undefined ? Number(payload.servings) : Number(row[4]);
+    const newCalories = payload.calories !== undefined ? Number(payload.calories) : Number(row[5]);
+    const newProtein = payload.protein !== undefined ? Number(payload.protein) : Number(row[6]);
+    const newCarbs = payload.carbs !== undefined ? Number(payload.carbs) : Number(row[7]);
+    const newFat = payload.fat !== undefined ? Number(payload.fat) : Number(row[8]);
+    const newNotes = payload.notes !== undefined ? payload.notes : row[9];
+
+    logSheet.getRange(targetRow, 4, 1, 7).setValues([[
+      newFoodName, newServings, newCalories, newProtein, newCarbs, newFat, newNotes
+    ]]);
+
+    return {
+      success: true,
+      updatedRow: targetRow,
+      meal: { rowNumber: targetRow, foodName: newFoodName, servings: newServings, calories: newCalories, protein: newProtein, carbs: newCarbs, fat: newFat, notes: newNotes }
+    };
+  }
+
+  return { success: false, message: 'Meal row not found' };
 }
 
 function handleDeleteMeal(ss, payload) {
@@ -594,6 +638,61 @@ function handleDeleteFoodItem(ss, payload) {
   }
 
   return { success: false, message: 'Item not found' };
+}
+
+function handleUpdateFoodItem(ss, payload) {
+  const foodSheet = ss.getSheetByName(SHEET_FOOD_DB) || ss.getSheets()[0];
+  const lastRow = foodSheet.getLastRow();
+  if (lastRow < 4) return { success: false, message: 'No food items' };
+
+  const targetCode = payload.code || payload.id;
+  const targetName = payload.name;
+
+  const data = foodSheet.getRange(4, 1, lastRow - 3, 10).getValues();
+  for (let i = 0; i < data.length; i++) {
+    const rowCode = String(data[i][0] || '').trim();
+    const rowName = String(data[i][2] || '').trim();
+
+    if ((targetCode && rowCode === String(targetCode).trim()) ||
+        (!targetCode && targetName && (rowName === String(targetName).trim() || rowName.includes(targetName)))) {
+      const rowIndex = i + 4;
+      const row = data[i];
+
+      const newCode = payload.newCode !== undefined ? payload.newCode : row[0];
+      const newCategory = payload.category !== undefined ? payload.category : row[1];
+      const newName = payload.newName !== undefined ? payload.newName : (payload.name !== undefined ? payload.name : row[2]);
+      const newServingSize = payload.servingSize !== undefined ? payload.servingSize : row[3];
+      const newCalories = payload.calories !== undefined ? Number(payload.calories) : Number(row[4]);
+      const newProtein = payload.protein !== undefined ? Number(payload.protein) : Number(row[5]);
+      const newCarbs = payload.carbs !== undefined ? Number(payload.carbs) : Number(row[6]);
+      const newFat = payload.fat !== undefined ? Number(payload.fat) : Number(row[7]);
+      const newTargetGroup = payload.targetGroup !== undefined ? payload.targetGroup : row[8];
+      const newNotes = payload.notes !== undefined ? payload.notes : row[9];
+
+      foodSheet.getRange(rowIndex, 1, 1, 10).setValues([[
+        newCode, newCategory, newName, newServingSize, newCalories, newProtein, newCarbs, newFat, newTargetGroup, newNotes
+      ]]);
+
+      return {
+        success: true,
+        updatedRow: rowIndex,
+        food: {
+          code: newCode,
+          category: newCategory,
+          name: newName,
+          servingSize: newServingSize,
+          calories: newCalories,
+          protein: newProtein,
+          carbs: newCarbs,
+          fat: newFat,
+          targetGroup: newTargetGroup,
+          notes: newNotes
+        }
+      };
+    }
+  }
+
+  return { success: false, message: 'Food item not found' };
 }
 
 function handleDeduplicateFoodItems(ss) {
