@@ -18,7 +18,14 @@ import {
   Target,
   Sparkles,
   Zap,
+  Sliders,
 } from "lucide-react"
+import {
+  AllCalorieSettings,
+  getCalorieSettings,
+  getIntakeTarget,
+} from "@/lib/calorieSettings"
+import { CalorieSettingsModal } from "@/components/modals/CalorieSettingsModal"
 import { Doughnut, Bar } from "react-chartjs-2"
 import {
   Chart as ChartJS,
@@ -70,12 +77,21 @@ export function DashboardView({
 }: DashboardViewProps) {
   const isMale = selectedPerson === "ฝ่ายชาย"
 
-  // Base Targets from Sheet C
-  const TARGET_CALORIES = isMale ? 2000 : 1400
-  const MAINTENANCE_CALORIES = isMale ? 2500 : 1850 // TDEE baseline
-  const TARGET_PROTEIN = isMale ? 160 : 104
-  const TARGET_CARBS = isMale ? 210 : 130
-  const TARGET_FAT = isMale ? 60 : 40
+  // Calorie & TDEE Settings from localStorage / Defaults
+  const [calorieSettings, setCalorieSettings] = React.useState<AllCalorieSettings>(getCalorieSettings)
+  const [calorieModalOpen, setCalorieModalOpen] = React.useState(false)
+
+  React.useEffect(() => {
+    setCalorieSettings(getCalorieSettings())
+  }, [selectedPerson])
+
+  const currentPersonSettings = isMale ? calorieSettings.male : calorieSettings.female
+  const MAINTENANCE_CALORIES = currentPersonSettings.maintenance || (isMale ? 2000 : 1700)
+  const DEFICIT_TARGET = currentPersonSettings.deficit || 300
+  const TARGET_CALORIES = getIntakeTarget(currentPersonSettings) // Maintenance - Deficit, e.g. 2000 - 300 = 1700
+  const TARGET_PROTEIN = currentPersonSettings.protein || (isMale ? 160 : 104)
+  const TARGET_CARBS = currentPersonSettings.carbs || (isMale ? 210 : 130)
+  const TARGET_FAT = currentPersonSettings.fat || (isMale ? 60 : 40)
   const START_WEIGHT = isMale ? 100.0 : 65.0
   const ULTIMATE_TARGET_WEIGHT = isMale ? 70.0 : 50.0
 
@@ -227,12 +243,29 @@ export function DashboardView({
               โภชนาการและแผนสุขภาพ: <span className={isMale ? "text-emerald-400" : "text-pink-400"}>{selectedPerson}</span>
             </h1>
           </div>
-          <p className="text-slate-400 text-sm">
-            เป้าหมาย: {TARGET_CALORIES.toLocaleString()} kcal | โปรตีน {TARGET_PROTEIN}g | นน. เริ่ม {START_WEIGHT} kg ➔ เป้า {ULTIMATE_TARGET_WEIGHT} kg
-          </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300 mt-1">
+            <span>🔥 เผาผลาญ: <strong className="text-white font-mono">{MAINTENANCE_CALORIES.toLocaleString()}</strong> kcal</span>
+            <span>•</span>
+            <span>🎯 ตัดทอน: <strong className="text-amber-300 font-mono">-{DEFICIT_TARGET.toLocaleString()}</strong> kcal</span>
+            <span>•</span>
+            <span className="bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-md font-semibold border border-emerald-500/30">
+              🍽️ ควรกินไม่เกิน: <span className="font-mono">{TARGET_CALORIES.toLocaleString()}</span> kcal/วัน
+            </span>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Calorie Settings Button */}
+          <Button
+            onClick={() => setCalorieModalOpen(true)}
+            variant="outline"
+            className="border-amber-500/40 text-amber-300 hover:text-white hover:bg-amber-500/20 text-xs font-medium flex items-center gap-1.5 h-9 px-3 shadow-md"
+            title="ตั้งค่าแคลอรี่เผาผลาญต่อวัน (TDEE) และเป้าหมายตัดทอนแคลอรี่"
+          >
+            <Flame className="h-4 w-4 text-amber-400" />
+            ตั้งเป้าแคลอรี่ (TDEE)
+          </Button>
+
           {/* Toggle Couple View */}
           <div className="flex items-center gap-1.5 bg-[#0b0f19] p-1 rounded-xl border border-[#26334d]">
             <button
@@ -386,23 +419,58 @@ export function DashboardView({
         {/* Calories Card */}
         <Card className="bg-[#151d2f] border-[#26334d] hover:border-emerald-500/40 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs font-medium text-slate-400">แคลอรี่วันนี้</CardTitle>
-            <div className={`p-2 rounded-xl ${isMale ? "bg-emerald-500/10 text-emerald-400" : "bg-pink-500/10 text-pink-400"}`}>
-              <Flame className="h-4 w-4" />
+            <div>
+              <CardTitle className="text-xs font-semibold text-white flex items-center gap-1">
+                แคลอรี่วันนี้ (โควต้ากิน)
+              </CardTitle>
+              <span className="text-[10px] text-slate-400">
+                เผาผลาญ {MAINTENANCE_CALORIES.toLocaleString()} - ตัดทอน {DEFICIT_TARGET.toLocaleString()}
+              </span>
             </div>
+            <button
+              onClick={() => setCalorieModalOpen(true)}
+              className={`p-2 rounded-xl transition-all hover:scale-105 cursor-pointer ${
+                isMale ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20" : "bg-pink-500/10 text-pink-400 hover:bg-pink-500/20"
+              }`}
+              title="คลิกเพื่อตั้งค่าแคลอรี่เผาผลาญ (TDEE) และเป้าหมายตัดทอน"
+            >
+              <Flame className="h-4 w-4" />
+            </button>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">{totalCalories} <span className="text-xs font-normal text-slate-400">/ {TARGET_CALORIES} kcal</span></div>
+            <div className="text-2xl font-bold text-white">
+              {totalCalories} <span className="text-xs font-normal text-slate-400">/ ไม่เกิน {TARGET_CALORIES.toLocaleString()} kcal</span>
+            </div>
             <div className="mt-2 w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
               <div
-                className={`h-1.5 rounded-full transition-all ${isMale ? "bg-emerald-500" : "bg-pink-500"}`}
+                className={`h-1.5 rounded-full transition-all ${
+                  totalCalories > TARGET_CALORIES
+                    ? "bg-amber-500"
+                    : isMale
+                    ? "bg-emerald-500"
+                    : "bg-pink-500"
+                }`}
                 style={{ width: `${Math.min(100, (totalCalories / TARGET_CALORIES) * 100)}%` }}
               />
             </div>
             <div className="flex items-center justify-between text-xs text-slate-400 mt-2">
-              <span>{Math.round((totalCalories / TARGET_CALORIES) * 100)}% ของเป้า</span>
-              <span className={calorieDiff >= 0 ? "text-emerald-400" : "text-rose-400"}>
-                {calorieDiff >= 0 ? `เหลือ ${calorieDiff} kcal` : `เกิน ${Math.abs(calorieDiff)} kcal`}
+              <span>{Math.round((totalCalories / TARGET_CALORIES) * 100)}% ของโควต้า</span>
+              <span className={calorieDiff >= 0 ? "text-emerald-400 font-semibold" : "text-amber-400 font-semibold"}>
+                {calorieDiff >= 0 ? `กินได้อีก ${calorieDiff} kcal` : `เกินโควต้า ${Math.abs(calorieDiff)} kcal`}
+              </span>
+            </div>
+            <div className="mt-2 pt-2 border-t border-[#26334d]/60 flex items-center justify-between text-[11px]">
+              <span className="text-slate-400">ตัดทอนวันนี้:</span>
+              <span className={`font-mono font-semibold ${
+                MAINTENANCE_CALORIES - totalCalories >= DEFICIT_TARGET
+                  ? "text-emerald-400"
+                  : MAINTENANCE_CALORIES - totalCalories > 0
+                  ? "text-amber-300"
+                  : "text-rose-400"
+              }`}>
+                {MAINTENANCE_CALORIES - totalCalories >= 0
+                  ? `-${(MAINTENANCE_CALORIES - totalCalories).toLocaleString()} kcal (ตัดทอนสำเร็จ)`
+                  : `+${(totalCalories - MAINTENANCE_CALORIES).toLocaleString()} kcal (Caloric Surplus)`}
               </span>
             </div>
           </CardContent>
@@ -655,6 +723,14 @@ export function DashboardView({
           )}
         </CardContent>
       </Card>
+
+      {/* Calorie & TDEE Settings Modal */}
+      <CalorieSettingsModal
+        open={calorieModalOpen}
+        onOpenChange={setCalorieModalOpen}
+        currentPerson={selectedPerson}
+        onSaved={setCalorieSettings}
+      />
     </div>
   )
 }

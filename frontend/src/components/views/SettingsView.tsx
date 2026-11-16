@@ -15,7 +15,16 @@ import {
   FileSpreadsheet,
   Code2,
   GitBranch,
+  Flame,
+  Target,
+  Utensils,
 } from "lucide-react"
+import {
+  AllCalorieSettings,
+  getCalorieSettings,
+  getIntakeTarget,
+} from "@/lib/calorieSettings"
+import { CalorieSettingsModal } from "@/components/modals/CalorieSettingsModal"
 import {
   getGasUrl,
   setGasUrl,
@@ -35,6 +44,9 @@ export function SettingsView({ onLogout }: SettingsViewProps) {
   const [passcodeInput, setPasscodeInput] = React.useState(getSavedPasscode())
   const [testing, setTesting] = React.useState(false)
   const [testResult, setTestResult] = React.useState<{ success: boolean; message: string } | null>(null)
+  const [calorieSettings, setCalorieSettings] = React.useState<AllCalorieSettings>(getCalorieSettings)
+  const [calorieModalOpen, setCalorieModalOpen] = React.useState(false)
+  const [selectedPersonForModal, setSelectedPersonForModal] = React.useState("ฝ่ายชาย")
 
   const handleSaveGasUrl = () => {
     if (!gasUrlInput.trim()) {
@@ -166,6 +178,86 @@ export function SettingsView({ onLogout }: SettingsViewProps) {
         </CardContent>
       </Card>
 
+      {/* Calorie & TDEE Deficit Settings Card */}
+      <Card className="bg-[#151d2f] border-[#26334d]">
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base font-semibold text-white flex items-center gap-2">
+                <Flame className="h-5 w-5 text-amber-400" />
+                เป้าหมายแคลอรี่และอัตราเผาผลาญ (TDEE & Calorie Deficit)
+              </CardTitle>
+              <CardDescription className="text-slate-400 text-xs">
+                กำหนดแคลอรี่เผาผลาญต่อวันและเป้าตัดทอน เพื่อคำนวณโควต้าอาหารที่ควรกินไม่เกินในแต่ละวัน
+              </CardDescription>
+            </div>
+            <Button
+              onClick={() => {
+                setSelectedPersonForModal("ฝ่ายชาย")
+                setCalorieModalOpen(true)
+              }}
+              className="bg-amber-600 hover:bg-amber-500 text-white text-xs flex items-center gap-1.5 h-8 px-3 shadow-md shadow-amber-950 shrink-0"
+            >
+              <Flame className="h-3.5 w-3.5" />
+              ตั้งค่าเป้าแคลอรี่ (TDEE)
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Male Settings Box */}
+            <div className="p-3.5 rounded-xl bg-[#0b0f19] border border-emerald-500/30 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>🏋️‍♂️</span> ฝ่ายชาย (Male)
+                </span>
+                <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px]">
+                  ควรกินไม่เกิน {getIntakeTarget(calorieSettings.male).toLocaleString()} kcal/วัน
+                </Badge>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs pt-1 text-slate-300">
+                <div>
+                  <span className="text-slate-400 text-[11px] block">อัตราเผาผลาญ (TDEE):</span>
+                  <span className="font-mono font-bold text-white">{calorieSettings.male.maintenance.toLocaleString()} kcal</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[11px] block">เป้าตัดทอนต่อวัน:</span>
+                  <span className="font-mono font-bold text-amber-300">-{calorieSettings.male.deficit.toLocaleString()} kcal</span>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-400 font-mono bg-[#111726] p-1.5 rounded border border-[#26334d]">
+                สูตร: {calorieSettings.male.maintenance} - {calorieSettings.male.deficit} = กินไม่เกิน {getIntakeTarget(calorieSettings.male)} kcal
+              </p>
+            </div>
+
+            {/* Female Settings Box */}
+            <div className="p-3.5 rounded-xl bg-[#0b0f19] border border-pink-500/30 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>🧘‍♀️</span> ฝ่ายหญิง (Female)
+                </span>
+                <Badge className="bg-pink-500/20 text-pink-300 border-pink-500/30 text-[10px]">
+                  ควรกินไม่เกิน {getIntakeTarget(calorieSettings.female).toLocaleString()} kcal/วัน
+                </Badge>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs pt-1 text-slate-300">
+                <div>
+                  <span className="text-slate-400 text-[11px] block">อัตราเผาผลาญ (TDEE):</span>
+                  <span className="font-mono font-bold text-white">{calorieSettings.female.maintenance.toLocaleString()} kcal</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[11px] block">เป้าตัดทอนต่อวัน:</span>
+                  <span className="font-mono font-bold text-pink-300">-{calorieSettings.female.deficit.toLocaleString()} kcal</span>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-400 font-mono bg-[#111726] p-1.5 rounded border border-[#26334d]">
+                สูตร: {calorieSettings.female.maintenance} - {calorieSettings.female.deficit} = กินไม่เกิน {getIntakeTarget(calorieSettings.female)} kcal
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Passcode Settings */}
       <Card className="bg-[#151d2f] border-[#26334d]">
         <CardHeader>
@@ -278,6 +370,13 @@ export function SettingsView({ onLogout }: SettingsViewProps) {
           ออกจากระบบ (Logout)
         </Button>
       </div>
+
+      <CalorieSettingsModal
+        open={calorieModalOpen}
+        onOpenChange={setCalorieModalOpen}
+        currentPerson={selectedPersonForModal}
+        onSaved={setCalorieSettings}
+      />
     </div>
   )
 }
