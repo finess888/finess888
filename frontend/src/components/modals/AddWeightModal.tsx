@@ -15,16 +15,31 @@ interface AddWeightModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSave: (entry: any) => Promise<void>
+  defaultPerson?: string
 }
 
-export function AddWeightModal({ open, onOpenChange, onSave }: AddWeightModalProps) {
+export function AddWeightModal({
+  open,
+  onOpenChange,
+  onSave,
+  defaultPerson = "ฝ่ายชาย",
+}: AddWeightModalProps) {
   const todayStr = new Date().toISOString().split("T")[0]
   const [date, setDate] = React.useState(todayStr)
-  const [weight, setWeight] = React.useState<number | "">(65.0)
-  const [bodyFat, setBodyFat] = React.useState<number | "">("")
-  const [muscleMass, setMuscleMass] = React.useState<number | "">("")
+  const [person, setPerson] = React.useState(defaultPerson)
+  const [weight, setWeight] = React.useState<number | "">(person === "ฝ่ายชาย" ? 100.0 : 65.0)
   const [notes, setNotes] = React.useState("")
   const [saving, setSaving] = React.useState(false)
+
+  React.useEffect(() => {
+    setPerson(defaultPerson)
+    setWeight(defaultPerson === "ฝ่ายชาย" ? 100.0 : 65.0)
+  }, [defaultPerson, open])
+
+  const handlePersonChange = (newPerson: string) => {
+    setPerson(newPerson)
+    setWeight(newPerson === "ฝ่ายชาย" ? 100.0 : 65.0)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,13 +52,12 @@ export function AddWeightModal({ open, onOpenChange, onSave }: AddWeightModalPro
     try {
       await onSave({
         date,
+        person,
         weight: Number(weight),
-        bodyFat: bodyFat !== "" ? Number(bodyFat) : null,
-        muscleMass: muscleMass !== "" ? Number(muscleMass) : null,
         notes: notes.trim(),
       })
 
-      toast.success("บันทึกสถิติน้ำหนักเรียบร้อยแล้ว!")
+      toast.success(`บันทึกน้ำหนักของ ${person} ลง Google Sheets สำเร็จ!`)
       onOpenChange(false)
       setNotes("")
     } catch (err: any) {
@@ -58,11 +72,40 @@ export function AddWeightModal({ open, onOpenChange, onSave }: AddWeightModalPro
       <DialogContent className="max-w-md bg-[#151d2f] border-[#26334d] text-slate-100">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
-            <span>⚖️</span> บันทึกน้ำหนักและสัดส่วน
+            <span>⚖️</span> บันทึกน้ำหนักตัวลงชีต (Google Sheets)
           </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          {/* Person Selector */}
+          <div className="space-y-1.5">
+            <Label className="text-slate-300 text-xs">ผู้ชั่งน้ำหนัก</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => handlePersonChange("ฝ่ายชาย")}
+                className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 border transition-all ${
+                  person === "ฝ่ายชาย"
+                    ? "bg-emerald-600 border-emerald-500 text-white shadow-md shadow-emerald-950"
+                    : "bg-[#0b0f19] border-[#26334d] text-slate-400 hover:text-white"
+                }`}
+              >
+                <span>🏋️‍♂️</span> ฝ่ายชาย (เป้า 70 kg)
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePersonChange("ฝ่ายหญิง")}
+                className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 border transition-all ${
+                  person === "ฝ่ายหญิง"
+                    ? "bg-pink-600 border-pink-500 text-white shadow-md shadow-pink-950"
+                    : "bg-[#0b0f19] border-[#26334d] text-slate-400 hover:text-white"
+                }`}
+              >
+                <span>🧘‍♀️</span> ฝ่ายหญิง (เป้า 50 kg)
+              </button>
+            </div>
+          </div>
+
           <div className="space-y-1.5">
             <Label className="text-slate-300 text-xs">วันที่ชั่งน้ำหนัก</Label>
             <Input
@@ -74,52 +117,27 @@ export function AddWeightModal({ open, onOpenChange, onSave }: AddWeightModalPro
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <div className="space-y-1.5">
-              <Label className="text-emerald-400 text-xs">น้ำหนักตัว (kg) *</Label>
-              <Input
-                type="number"
-                step="0.1"
-                min="20"
-                max="300"
-                value={weight}
-                onChange={(e) => setWeight(e.target.value === "" ? "" : Number(e.target.value))}
-                required
-                className="bg-[#0b0f19] border-[#26334d] text-white h-9 text-sm"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-amber-400 text-xs">% ไขมัน (% BF)</Label>
-              <Input
-                type="number"
-                step="0.1"
-                min="1"
-                max="60"
-                placeholder="เช่น 15.5"
-                value={bodyFat}
-                onChange={(e) => setBodyFat(e.target.value === "" ? "" : Number(e.target.value))}
-                className="bg-[#0b0f19] border-[#26334d] text-white h-9 text-sm"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-cyan-400 text-xs">กล้ามเนื้อ (kg)</Label>
-              <Input
-                type="number"
-                step="0.1"
-                min="1"
-                max="100"
-                placeholder="เช่น 32.0"
-                value={muscleMass}
-                onChange={(e) => setMuscleMass(e.target.value === "" ? "" : Number(e.target.value))}
-                className="bg-[#0b0f19] border-[#26334d] text-white h-9 text-sm"
-              />
-            </div>
+          <div className="space-y-1.5">
+            <Label className={`${person === "ฝ่ายชาย" ? "text-emerald-400" : "text-pink-400"} text-xs font-semibold`}>
+              น้ำหนักตัว (kg) *
+            </Label>
+            <Input
+              type="number"
+              step="0.1"
+              min="20"
+              max="300"
+              value={weight}
+              onChange={(e) => setWeight(e.target.value === "" ? "" : Number(e.target.value))}
+              required
+              autoFocus
+              className="bg-[#0b0f19] border-[#26334d] text-white h-10 text-base font-bold"
+            />
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-slate-300 text-xs">บันทึกเพิ่มเติม</Label>
+            <Label className="text-slate-300 text-xs">กิจกรรม / บันทึกสุขภาพ</Label>
             <Input
-              placeholder="เช่น ชั่งตอนเช้าหลังตื่นนอน"
+              placeholder="เช่น ชั่งตอนเช้าหลังตื่นนอน, เวทเทรนนิ่งช่วงเย็น"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="bg-[#0b0f19] border-[#26334d] text-white h-9 text-sm"
@@ -140,7 +158,7 @@ export function AddWeightModal({ open, onOpenChange, onSave }: AddWeightModalPro
               disabled={saving}
               className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium"
             >
-              {saving ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
+              {saving ? "กำลังบันทึกลงชีต..." : "บันทึกลงชีต B"}
             </Button>
           </DialogFooter>
         </form>

@@ -106,6 +106,10 @@ function doPost(e) {
         result = handleAddFoodItem(ss, payload);
         break;
       }
+      case 'ADD_WEIGHT_LOG': {
+        result = handleAddWeightLog(ss, payload);
+        break;
+      }
       case 'SAVE_SETTINGS': {
         if (payload.newPasscode) {
           PropertiesService.getScriptProperties().setProperty('APP_PASSCODE', String(payload.newPasscode).trim());
@@ -280,6 +284,61 @@ function handleAddMeal(ss, payload) {
     rowNumber: targetRow,
     meal: { date: payload.date, person, mealType, foodName, servings, calories, protein, carbs, fat, notes }
   };
+}
+
+function handleAddWeightLog(ss, payload) {
+  const logSheet = ss.getSheetByName(SHEET_DAILY_LOG) || ss.getSheets()[1];
+  const lastRow = logSheet.getLastRow();
+  const dateStr = payload.date ? String(payload.date).split('T')[0] : Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd');
+  const person = String(payload.person || 'ฝ่ายชาย').trim();
+  const weight = Number(payload.weight || 0);
+  const notes = payload.notes || '';
+
+  // Scan Column L (12 in 1-based, index 11 in 0-based) for the matching date
+  let matchedRow = -1;
+  if (lastRow >= 4) {
+    const datesCol = logSheet.getRange(4, 12, lastRow - 3, 1).getValues();
+    for (let i = 0; i < datesCol.length; i++) {
+      let d = datesCol[i][0];
+      let rowDateStr = '';
+      if (d instanceof Date) {
+        rowDateStr = Utilities.formatDate(d, 'Asia/Bangkok', 'yyyy-MM-dd');
+      } else if (d) {
+        rowDateStr = String(d).split('T')[0];
+      }
+      if (rowDateStr === dateStr) {
+        matchedRow = i + 4;
+        break;
+      }
+    }
+  }
+
+  // Col O (15) for male, Col R (18) for female
+  const colToUpdate = person === 'ฝ่ายชาย' ? 15 : 18;
+  if (matchedRow > 0) {
+    if (weight > 0) {
+      logSheet.getRange(matchedRow, colToUpdate).setValue(weight);
+    }
+    if (notes) {
+      const currentNotes = logSheet.getRange(matchedRow, 21).getValue();
+      const newNotes = currentNotes ? currentNotes + '; ' + notes : notes;
+      logSheet.getRange(matchedRow, 21).setValue(newNotes);
+    }
+    return { success: true, updatedRow: matchedRow, date: dateStr, person, weight };
+  } else {
+    const targetRow = lastRow + 1;
+    const dateVal = new Date(dateStr);
+    const dayNames = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+    const dayName = dayNames[dateVal.getDay()] || 'จันทร์';
+    const rowValues = new Array(21).fill('');
+    rowValues[11] = dateVal;
+    rowValues[12] = dayName;
+    rowValues[13] = 'วันปกติ';
+    rowValues[colToUpdate - 1] = weight;
+    rowValues[20] = notes;
+    logSheet.getRange(targetRow, 1, 1, 21).setValues([rowValues]);
+    return { success: true, newRow: targetRow, date: dateStr, person, weight };
+  }
 }
 
 function handleAddFoodItem(ss, payload) {

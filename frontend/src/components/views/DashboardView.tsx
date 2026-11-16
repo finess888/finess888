@@ -2,6 +2,7 @@ import * as React from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import {
   Flame,
   Beef,
@@ -9,13 +10,14 @@ import {
   Droplet,
   Plus,
   CheckCircle2,
-  Circle,
   Calendar,
   TrendingUp,
   UtensilsCrossed,
   ArrowRight,
-  User,
-  Users,
+  Scale,
+  Target,
+  Sparkles,
+  Zap,
 } from "lucide-react"
 import { Doughnut, Bar } from "react-chartjs-2"
 import {
@@ -50,6 +52,7 @@ interface DashboardViewProps {
   selectedPerson: string
   onSelectPerson: (person: string) => void
   onOpenAddMeal: () => void
+  onOpenAddWeight: () => void
   onToggleMealStatus: (id: string, currentStatus: string) => void
   onNavigateToMealPlan: () => void
 }
@@ -61,27 +64,90 @@ export function DashboardView({
   selectedPerson,
   onSelectPerson,
   onOpenAddMeal,
+  onOpenAddWeight,
   onToggleMealStatus,
   onNavigateToMealPlan,
 }: DashboardViewProps) {
   const isMale = selectedPerson === "ฝ่ายชาย"
 
-  // Target macros based on sheet C metadata
+  // Base Targets from Sheet C
   const TARGET_CALORIES = isMale ? 2000 : 1400
+  const MAINTENANCE_CALORIES = isMale ? 2500 : 1850 // TDEE baseline
   const TARGET_PROTEIN = isMale ? 160 : 104
   const TARGET_CARBS = isMale ? 210 : 130
   const TARGET_FAT = isMale ? 60 : 40
-  const TARGET_WEIGHT = isMale ? 70.0 : 50.0
+  const START_WEIGHT = isMale ? 100.0 : 65.0
+  const ULTIMATE_TARGET_WEIGHT = isMale ? 70.0 : 50.0
 
-  // Filter meals for the selected person
+  // 1. Interactive Fat Loss Goal (User can customize, default 10 kg)
+  const storageKey = isMale ? "finess_fatloss_target_male" : "finess_fatloss_target_female"
+  const [targetFatLossKg, setTargetFatLossKg] = React.useState<number>(() => {
+    const saved = localStorage.getItem(storageKey)
+    return saved ? Number(saved) : (isMale ? 10 : 5)
+  })
+
+  React.useEffect(() => {
+    const saved = localStorage.getItem(storageKey)
+    setTargetFatLossKg(saved ? Number(saved) : (isMale ? 10 : 5))
+  }, [isMale, storageKey])
+
+  const handleUpdateTargetKg = (kg: number) => {
+    const valid = Math.max(1, Math.min(50, kg))
+    setTargetFatLossKg(valid)
+    localStorage.setItem(storageKey, String(valid))
+  }
+
+  // 1 kg of fat = 7,500 kcal deficit
+  const totalDeficitTargetKcal = targetFatLossKg * 7500
+
+  // Find latest weight logged from healthLogs
+  const logsWithWeight = healthLogs.filter((log) => {
+    const w = isMale ? log.maleWeight : log.femaleWeight
+    return w !== null && w !== undefined && w !== "" && !isNaN(Number(w))
+  })
+  const latestLog = logsWithWeight.length > 0 ? logsWithWeight[logsWithWeight.length - 1] : null
+  const currentWeight = latestLog
+    ? Number(isMale ? latestLog.maleWeight : latestLog.femaleWeight)
+    : START_WEIGHT
+
+  // Actual weight lost
+  const weightLostSoFar = Math.max(0, START_WEIGHT - currentWeight)
+
+  // Calorie deficit calculation:
+  // 1) From weight dropped: weightLostSoFar * 7,500 kcal
+  // 2) Plus daily intake deficit from meals logged
   const personMeals = meals.filter((m) => {
     const p = String(m.person || m.Person || "").trim()
     return p === selectedPerson || p === "ทั้งคู่"
   })
 
+  // Group meals by date to calculate daily intake deficits
+  const dateIntakeMap: Record<string, number> = {}
+  personMeals.forEach((m) => {
+    const d = String(m.date || m.Date || "").split("T")[0]
+    if (d) {
+      dateIntakeMap[d] = (dateIntakeMap[d] || 0) + Number(m.calories || m.Calories || 0)
+    }
+  })
+
+  let accumulatedIntakeDeficit = 0
+  Object.values(dateIntakeMap).forEach((dailyIntake) => {
+    const deficit = Math.max(0, MAINTENANCE_CALORIES - dailyIntake)
+    accumulatedIntakeDeficit += deficit
+  })
+
+  // Combined accumulated deficit
+  const accumulatedDeficitKcal = Math.max(
+    weightLostSoFar * 7500,
+    accumulatedIntakeDeficit
+  )
+
+  const progressPercent = Math.min(100, (accumulatedDeficitKcal / totalDeficitTargetKcal) * 100)
+  const remainingKcal = Math.max(0, totalDeficitTargetKcal - accumulatedDeficitKcal)
+  const remainingFatKg = (remainingKcal / 7500).toFixed(1)
+
   // Date selection (default today or latest logged date)
   const todayStr = new Date().toISOString().split("T")[0]
-  // Check if today has meals, or take the latest date from meals
   const hasTodayMeals = personMeals.some((m) => String(m.date || m.Date || "").split("T")[0] === todayStr)
   const latestDate = personMeals.length > 0 ? personMeals[personMeals.length - 1].date : todayStr
   const activeDate = hasTodayMeals ? todayStr : latestDate
@@ -96,12 +162,6 @@ export function DashboardView({
   const totalProtein = activeDateMeals.reduce((sum, m) => sum + Number(m.protein || m.Protein || 0), 0)
   const totalCarbs = activeDateMeals.reduce((sum, m) => sum + Number(m.carbs || m.Carbs || 0), 0)
   const totalFat = activeDateMeals.reduce((sum, m) => sum + Number(m.fat || m.Fat || 0), 0)
-
-  // Find health log for the latest entry
-  const latestHealth = healthLogs.find((h) => (isMale ? h.maleWeight : h.femaleWeight))
-  const currentWeight = isMale ? latestHealth?.maleWeight : latestHealth?.femaleWeight
-
-  // Calorie remaining
   const calorieDiff = TARGET_CALORIES - totalCalories
 
   // Doughnut Chart Data (Macro Breakdown)
@@ -158,7 +218,7 @@ export function DashboardView({
 
   return (
     <div className="space-y-6">
-      {/* Top Banner & Person Switcher */}
+      {/* Top Banner & Action Buttons */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-[#151d2f] to-[#151d2f] border border-[#26334d] rounded-2xl p-6 shadow-lg">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -168,34 +228,158 @@ export function DashboardView({
             </h1>
           </div>
           <p className="text-slate-400 text-sm">
-            เป้าหมาย: {TARGET_CALORIES.toLocaleString()} kcal | โปรตีน {TARGET_PROTEIN}g | นน. เป้าหมาย {TARGET_WEIGHT} กก.
+            เป้าหมาย: {TARGET_CALORIES.toLocaleString()} kcal | โปรตีน {TARGET_PROTEIN}g | นน. เริ่ม {START_WEIGHT} kg ➔ เป้า {ULTIMATE_TARGET_WEIGHT} kg
           </p>
         </div>
 
-        {/* Toggle Couple View */}
-        <div className="flex items-center gap-2 bg-[#0b0f19] p-1.5 rounded-xl border border-[#26334d]">
-          <button
-            onClick={() => onSelectPerson("ฝ่ายชาย")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              selectedPerson === "ฝ่ายชาย"
-                ? "bg-emerald-600 text-white shadow-md shadow-emerald-950"
-                : "text-slate-400 hover:text-white"
-            }`}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Toggle Couple View */}
+          <div className="flex items-center gap-1.5 bg-[#0b0f19] p-1 rounded-xl border border-[#26334d]">
+            <button
+              onClick={() => onSelectPerson("ฝ่ายชาย")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                selectedPerson === "ฝ่ายชาย"
+                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-950"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <span>🏋️‍♂️</span> ฝ่ายชาย
+            </button>
+            <button
+              onClick={() => onSelectPerson("ฝ่ายหญิง")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                selectedPerson === "ฝ่ายหญิง"
+                  ? "bg-pink-600 text-white shadow-md shadow-pink-950"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <span>🧘‍♀️</span> ฝ่ายหญิง
+            </button>
+          </div>
+
+          {/* Action Buttons: Add Weight & Add Meal */}
+          <Button
+            onClick={onOpenAddWeight}
+            className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1.5 h-9 px-3 shadow-md shadow-indigo-950"
           >
-            <span>🏋️‍♂️</span> ฝ่ายชาย
-          </button>
-          <button
-            onClick={() => onSelectPerson("ฝ่ายหญิง")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              selectedPerson === "ฝ่ายหญิง"
-                ? "bg-pink-600 text-white shadow-md shadow-pink-950"
-                : "text-slate-400 hover:text-white"
-            }`}
+            <Scale className="h-4 w-4" />
+            + บันทึกน้ำหนัก
+          </Button>
+
+          <Button
+            onClick={onOpenAddMeal}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium flex items-center gap-1.5 h-9 px-3 shadow-md shadow-emerald-950"
           >
-            <span>🧘‍♀️</span> ฝ่ายหญิง
-          </button>
+            <Plus className="h-4 w-4" />
+            + เพิ่มมื้ออาหาร
+          </Button>
         </div>
       </div>
+
+      {/* 🎯 FEATURE 1: CUMULATIVE FAT LOSS & CALORIE DEFICIT GOAL WIDGET */}
+      <Card className="bg-gradient-to-br from-[#121a2d] to-[#151d2f] border border-emerald-500/30 shadow-xl overflow-hidden">
+        <CardHeader className="border-b border-[#26334d] pb-3 bg-[#0d1424]/60">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                <Target className="h-5 w-5 text-emerald-400" />
+                เป้าหมายการตัดทอนแคลอรี่และลดไขมันรวม (Total Calorie Deficit & Fat Loss)
+              </CardTitle>
+              <CardDescription className="text-xs text-slate-400">
+                กฎทางโภชนาการ: เพื่อลดไขมัน 1 กิโลกรัม ต้องตัดทอนแคลอรี่ออกประมาณ 7,500 kcal
+              </CardDescription>
+            </div>
+
+            {/* Quick target selector pills */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs text-slate-400 mr-1">เลือกเป้าหมาย:</span>
+              {[5, 10, 15, 20, 30].map((kg) => (
+                <button
+                  key={kg}
+                  onClick={() => handleUpdateTargetKg(kg)}
+                  className={`text-xs px-2.5 py-1 rounded-md font-medium transition-all ${
+                    targetFatLossKg === kg
+                      ? "bg-emerald-600 text-white font-bold shadow-md shadow-emerald-950"
+                      : "bg-[#0b0f19] text-slate-400 border border-[#26334d] hover:text-white"
+                  }`}
+                >
+                  {kg} กก.
+                </button>
+              ))}
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-6 space-y-5">
+          {/* Main Target Metrics Banner */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div className="bg-[#0b0f19] p-4 rounded-xl border border-[#26334d]">
+              <span className="text-xs text-slate-400 block mb-1">🎯 เป้าหมายลดไขมัน</span>
+              <div className="text-2xl font-bold text-white flex items-baseline gap-1">
+                <span>{targetFatLossKg}</span>
+                <span className="text-sm font-normal text-slate-400">กิโลกรัม (kg)</span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">กำหนดเองได้ตามแผนระยะยาว</p>
+            </div>
+
+            <div className="bg-[#0b0f19] p-4 rounded-xl border border-[#26334d]">
+              <span className="text-xs text-slate-400 block mb-1">🔥 ต้องตัดทอนแคลอรี่รวม</span>
+              <div className="text-2xl font-bold text-amber-400 flex items-baseline gap-1">
+                <span>{totalDeficitTargetKcal.toLocaleString()}</span>
+                <span className="text-sm font-normal text-slate-400">kcal</span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">คำนวณจาก {targetFatLossKg} × 7,500 kcal</p>
+            </div>
+
+            <div className="bg-[#0b0f19] p-4 rounded-xl border border-[#26334d]">
+              <span className="text-xs text-slate-400 block mb-1">⚡ ตัดทอนสะสมไปแล้ว</span>
+              <div className="text-2xl font-bold text-emerald-400 flex items-baseline gap-1">
+                <span>{Math.round(accumulatedDeficitKcal).toLocaleString()}</span>
+                <span className="text-sm font-normal text-slate-400">kcal</span>
+              </div>
+              <p className="text-[11px] text-emerald-500/80 mt-1">
+                ลดได้แล้ว ~{(accumulatedDeficitKcal / 7500).toFixed(2)} kg
+              </p>
+            </div>
+
+            <div className="bg-[#0b0f19] p-4 rounded-xl border border-[#26334d]">
+              <span className="text-xs text-slate-400 block mb-1">⏳ ยังต้องตัดทอนอีก</span>
+              <div className="text-2xl font-bold text-rose-400 flex items-baseline gap-1">
+                <span>{Math.round(remainingKcal).toLocaleString()}</span>
+                <span className="text-sm font-normal text-slate-400">kcal</span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">เหลืออีกประมาณ {remainingFatKg} กิโลกรัม</p>
+            </div>
+          </div>
+
+          {/* Visual Progress Bar & % */}
+          <div className="space-y-2 bg-[#0b0f19]/80 p-4 rounded-xl border border-[#26334d]">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-white">ความคืบหน้ารวมต่อเป้าหมาย</span>
+                <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[11px]">
+                  ทำไปแล้ว {progressPercent.toFixed(1)}%
+                </Badge>
+              </div>
+              <span className="text-xs text-slate-400 font-mono">
+                {Math.round(accumulatedDeficitKcal).toLocaleString()} / {totalDeficitTargetKcal.toLocaleString()} kcal
+              </span>
+            </div>
+
+            <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden p-0.5">
+              <div
+                className="bg-gradient-to-r from-emerald-500 to-teal-400 h-2 rounded-full transition-all duration-700 shadow-lg shadow-emerald-500/50"
+                style={{ width: `${Math.max(2, Math.min(100, progressPercent))}%` }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+              <span>จุดเริ่มต้น: 0 kcal (0%)</span>
+              <span>เป้าหมายความสำเร็จ: {totalDeficitTargetKcal.toLocaleString()} kcal (100%)</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Metric Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -335,11 +519,20 @@ export function DashboardView({
                 แนวโน้มการรับประทานอาหารเปรียบเทียบเป้าหมาย {TARGET_CALORIES} kcal
               </CardDescription>
             </div>
-            {currentWeight && (
+            <div className="flex items-center gap-2">
               <Badge variant="outline" className="border-emerald-500/40 text-emerald-400 bg-emerald-500/10">
-                น้ำหนักปัจจุบัน: {currentWeight} kg (เป้า {TARGET_WEIGHT} kg)
+                นน. ล่าสุด: {currentWeight} kg (เป้า {ULTIMATE_TARGET_WEIGHT} kg)
               </Badge>
-            )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onOpenAddWeight}
+                className="text-[11px] h-7 px-2 text-indigo-300 hover:text-white hover:bg-indigo-600/20 border border-indigo-500/30"
+              >
+                <Scale className="h-3 w-3 mr-1" />
+                ชั่งน้ำหนัก
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="h-64 pt-2">
             <Bar

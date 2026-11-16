@@ -98,6 +98,12 @@ export default function App() {
     await refetch()
   }
 
+  // Handle add weight log
+  const handleSaveWeight = async (newWeight: any) => {
+    await callGasApi("ADD_WEIGHT_LOG", newWeight)
+    await refetch()
+  }
+
   // Quick add from food database to today's meal plan
   const handleQuickAddMealFromFood = (food: any) => {
     setAddMealOpen(true)
@@ -336,6 +342,7 @@ export default function App() {
               selectedPerson={selectedPerson}
               onSelectPerson={setSelectedPerson}
               onOpenAddMeal={() => setAddMealOpen(true)}
+              onOpenAddWeight={() => setAddWeightOpen(true)}
               onToggleMealStatus={handleToggleMealStatus}
               onNavigateToMealPlan={() => setCurrentView("mealplan")}
             />
@@ -344,6 +351,8 @@ export default function App() {
           {currentView === "mealplan" && (
             <MealPlanView
               meals={meals}
+              selectedPerson={selectedPerson}
+              onSelectPerson={setSelectedPerson}
               onOpenAddMeal={() => setAddMealOpen(true)}
               onToggleMealStatus={handleToggleMealStatus}
               onDeleteMeal={handleDeleteMeal}
@@ -396,7 +405,8 @@ export default function App() {
       <AddWeightModal
         open={addWeightOpen}
         onOpenChange={setAddWeightOpen}
-        onSave={async () => {}}
+        onSave={handleSaveWeight}
+        defaultPerson={selectedPerson}
       />
     </div>
   )
