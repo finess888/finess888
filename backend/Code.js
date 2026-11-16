@@ -114,6 +114,14 @@ function doPost(e) {
         result = handleAddFoodItem(ss, payload);
         break;
       }
+      case 'DELETE_FOOD_ITEM': {
+        result = handleDeleteFoodItem(ss, payload);
+        break;
+      }
+      case 'DEDUPLICATE_FOODS': {
+        result = handleDeduplicateFoodItems(ss);
+        break;
+      }
       case 'ADD_WEIGHT_LOG': {
         result = handleAddWeightLog(ss, payload);
         break;
@@ -561,6 +569,58 @@ function handleAddFoodItem(ss, payload) {
     success: true,
     food: { code, category, name, servingSize, calories, protein, carbs, fat, targetGroup, notes }
   };
+}
+
+function handleDeleteFoodItem(ss, payload) {
+  const foodSheet = ss.getSheetByName(SHEET_FOOD_DB) || ss.getSheets()[0];
+  const lastRow = foodSheet.getLastRow();
+  if (lastRow < 4) {
+    return { success: false, message: 'No food items to delete' };
+  }
+
+  const targetCode = payload.code || payload.id;
+  const targetName = payload.name;
+
+  const data = foodSheet.getRange(4, 1, lastRow - 3, 10).getValues();
+  for (let i = data.length - 1; i >= 0; i--) {
+    const rowCode = String(data[i][0] || '').trim();
+    const rowName = String(data[i][2] || '').trim();
+
+    if ((targetCode && rowCode === String(targetCode).trim()) ||
+        (targetName && rowName === String(targetName).trim() && !targetCode)) {
+      foodSheet.deleteRow(i + 4);
+      return { success: true, deletedCode: rowCode, deletedName: rowName };
+    }
+  }
+
+  return { success: false, message: 'Item not found' };
+}
+
+function handleDeduplicateFoodItems(ss) {
+  const foodSheet = ss.getSheetByName(SHEET_FOOD_DB) || ss.getSheets()[0];
+  const lastRow = foodSheet.getLastRow();
+  if (lastRow < 4) return { success: true, removedCount: 0 };
+
+  const data = foodSheet.getRange(4, 1, lastRow - 3, 10).getValues();
+  const seen = new Set();
+  const rowsToDelete = [];
+
+  data.forEach((row, idx) => {
+    const name = String(row[2] || '').trim();
+    if (name) {
+      if (seen.has(name)) {
+        rowsToDelete.push(idx + 4);
+      } else {
+        seen.add(name);
+      }
+    }
+  });
+
+  for (let i = rowsToDelete.length - 1; i >= 0; i--) {
+    foodSheet.deleteRow(rowsToDelete[i]);
+  }
+
+  return { success: true, removedCount: rowsToDelete.length };
 }
 
 function createJsonResponse(data) {
