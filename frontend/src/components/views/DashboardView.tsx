@@ -19,6 +19,12 @@ import {
   Sparkles,
   Zap,
   Sliders,
+  Trophy,
+  Crown,
+  Medal,
+  Award,
+  Swords,
+  Users,
 } from "lucide-react"
 import {
   AllCalorieSettings,
@@ -75,7 +81,9 @@ export function DashboardView({
   onToggleMealStatus,
   onNavigateToMealPlan,
 }: DashboardViewProps) {
+  const isAll = selectedPerson === "ALL" || selectedPerson === "ทั้งหมด"
   const isMale = selectedPerson === "ฝ่ายชาย"
+  const isFemale = selectedPerson === "ฝ่ายหญิง"
 
   // Calorie & TDEE Settings from localStorage / Defaults
   const [calorieSettings, setCalorieSettings] = React.useState<AllCalorieSettings>(getCalorieSettings)
@@ -85,27 +93,50 @@ export function DashboardView({
     setCalorieSettings(getCalorieSettings())
   }, [selectedPerson])
 
-  const currentPersonSettings = isMale ? calorieSettings.male : calorieSettings.female
-  const MAINTENANCE_CALORIES = currentPersonSettings.maintenance || (isMale ? 2000 : 1700)
-  const DEFICIT_TARGET = currentPersonSettings.deficit || 300
-  const TARGET_CALORIES = getIntakeTarget(currentPersonSettings) // Maintenance - Deficit, e.g. 2000 - 300 = 1700
-  const TARGET_PROTEIN = currentPersonSettings.protein || (isMale ? 160 : 104)
-  const TARGET_CARBS = currentPersonSettings.carbs || (isMale ? 210 : 130)
-  const TARGET_FAT = currentPersonSettings.fat || (isMale ? 60 : 40)
-  const START_WEIGHT = isMale ? 100.0 : 65.0
-  const ULTIMATE_TARGET_WEIGHT = isMale ? 70.0 : 50.0
+  // Male Base Settings
+  const maleSettings = calorieSettings.male
+  const maleMaintenance = maleSettings.maintenance || 2000
+  const maleDeficitTarget = maleSettings.deficit || 300
+  const maleTargetIntake = getIntakeTarget(maleSettings) // 2000 - 300 = 1700
+  const maleTargetProtein = maleSettings.protein || 160
+  const maleTargetCarbs = maleSettings.carbs || 210
+  const maleTargetFat = maleSettings.fat || 60
+  const maleStartWeight = 100.0
+  const maleGoalWeight = 70.0
+
+  // Female Base Settings
+  const femaleSettings = calorieSettings.female
+  const femaleMaintenance = femaleSettings.maintenance || 1700
+  const femaleDeficitTarget = femaleSettings.deficit || 300
+  const femaleTargetIntake = getIntakeTarget(femaleSettings) // 1700 - 300 = 1400
+  const femaleTargetProtein = femaleSettings.protein || 104
+  const femaleTargetCarbs = femaleSettings.carbs || 130
+  const femaleTargetFat = femaleSettings.fat || 40
+  const femaleStartWeight = 65.0
+  const femaleGoalWeight = 50.0
+
+  // Dynamic values depending on active person / all view
+  const currentPersonSettings = isFemale ? femaleSettings : maleSettings
+  const MAINTENANCE_CALORIES = isAll ? (maleMaintenance + femaleMaintenance) : (isFemale ? femaleMaintenance : maleMaintenance)
+  const DEFICIT_TARGET = isAll ? (maleDeficitTarget + femaleDeficitTarget) : (isFemale ? femaleDeficitTarget : maleDeficitTarget)
+  const TARGET_CALORIES = isAll ? (maleTargetIntake + femaleTargetIntake) : (isFemale ? femaleTargetIntake : maleTargetIntake)
+  const TARGET_PROTEIN = isAll ? (maleTargetProtein + femaleTargetProtein) : (isFemale ? femaleTargetProtein : maleTargetProtein)
+  const TARGET_CARBS = isAll ? (maleTargetCarbs + femaleTargetCarbs) : (isFemale ? femaleTargetCarbs : maleTargetCarbs)
+  const TARGET_FAT = isAll ? (maleTargetFat + femaleTargetFat) : (isFemale ? femaleTargetFat : maleTargetFat)
+  const START_WEIGHT = isFemale ? femaleStartWeight : maleStartWeight
+  const ULTIMATE_TARGET_WEIGHT = isFemale ? femaleGoalWeight : maleGoalWeight
 
   // 1. Interactive Fat Loss Goal (User can customize, default 10 kg)
-  const storageKey = isMale ? "finess_fatloss_target_male" : "finess_fatloss_target_female"
+  const storageKey = isFemale ? "finess_fatloss_target_female" : "finess_fatloss_target_male"
   const [targetFatLossKg, setTargetFatLossKg] = React.useState<number>(() => {
     const saved = localStorage.getItem(storageKey)
-    return saved ? Number(saved) : (isMale ? 10 : 5)
+    return saved ? Number(saved) : (isFemale ? 5 : 10)
   })
 
   React.useEffect(() => {
     const saved = localStorage.getItem(storageKey)
-    setTargetFatLossKg(saved ? Number(saved) : (isMale ? 10 : 5))
-  }, [isMale, storageKey])
+    setTargetFatLossKg(saved ? Number(saved) : (isFemale ? 5 : 10))
+  }, [isFemale, storageKey])
 
   const handleUpdateTargetKg = (kg: number) => {
     const valid = Math.max(1, Math.min(50, kg))
@@ -118,24 +149,30 @@ export function DashboardView({
 
   // Find latest weight logged from healthLogs
   const logsWithWeight = healthLogs.filter((log) => {
-    const w = isMale ? log.maleWeight : log.femaleWeight
+    const w = isFemale ? log.femaleWeight : log.maleWeight
     return w !== null && w !== undefined && w !== "" && !isNaN(Number(w))
   })
   const latestLog = logsWithWeight.length > 0 ? logsWithWeight[logsWithWeight.length - 1] : null
   const currentWeight = latestLog
-    ? Number(isMale ? latestLog.maleWeight : latestLog.femaleWeight)
+    ? Number(isFemale ? latestLog.femaleWeight : latestLog.maleWeight)
     : START_WEIGHT
 
   // Actual weight lost
   const weightLostSoFar = Math.max(0, START_WEIGHT - currentWeight)
 
   // Calorie deficit calculation:
-  // 1) From weight dropped: weightLostSoFar * 7,500 kcal
-  // 2) Plus daily intake deficit from meals logged
   const personMeals = meals.filter((m) => {
     const p = String(m.person || m.Person || "").trim()
+    if (isAll) return true
     return p === selectedPerson || p === "ทั้งคู่"
   })
+
+  // Date selection (default today or latest logged date)
+  const todayStr = new Date().toISOString().split("T")[0]
+  const allMealDates = meals.map((m) => String(m.date || m.Date || "").split("T")[0]).filter(Boolean)
+  const hasTodayMeals = allMealDates.includes(todayStr)
+  const latestDate = allMealDates.length > 0 ? allMealDates[allMealDates.length - 1] : todayStr
+  const activeDate = hasTodayMeals ? todayStr : latestDate
 
   // Group meals by date to calculate daily intake deficits
   const dateIntakeMap: Record<string, number> = {}
@@ -162,23 +199,123 @@ export function DashboardView({
   const remainingKcal = Math.max(0, totalDeficitTargetKcal - accumulatedDeficitKcal)
   const remainingFatKg = (remainingKcal / 7500).toFixed(1)
 
-  // Date selection (default today or latest logged date)
-  const todayStr = new Date().toISOString().split("T")[0]
-  const hasTodayMeals = personMeals.some((m) => String(m.date || m.Date || "").split("T")[0] === todayStr)
-  const latestDate = personMeals.length > 0 ? personMeals[personMeals.length - 1].date : todayStr
-  const activeDate = hasTodayMeals ? todayStr : latestDate
-
-  const activeDateMeals = personMeals.filter((m) => {
-    const d = String(m.date || m.Date || "").split("T")[0]
-    return d === activeDate
+  // Male Active Meals & Nutrients
+  const maleMealsAll = meals.filter((m) => {
+    const p = String(m.person || m.Person || "").trim()
+    return p === "ฝ่ายชาย" || p === "ทั้งคู่"
   })
+  const maleActiveMeals = maleMealsAll.filter((m) => String(m.date || m.Date || "").split("T")[0] === activeDate)
+  const maleCalories = maleActiveMeals.reduce((s, m) => s + Number(m.calories || m.Calories || 0), 0)
+  const maleProtein = maleActiveMeals.reduce((s, m) => s + Number(m.protein || m.Protein || 0), 0)
+  const maleCarbs = maleActiveMeals.reduce((s, m) => s + Number(m.carbs || m.Carbs || 0), 0)
+  const maleFat = maleActiveMeals.reduce((s, m) => s + Number(m.fat || m.Fat || 0), 0)
+  const maleDeficitToday = maleMaintenance - maleCalories
+  const maleIntakeDiff = maleTargetIntake - maleCalories
+
+  // Female Active Meals & Nutrients
+  const femaleMealsAll = meals.filter((m) => {
+    const p = String(m.person || m.Person || "").trim()
+    return p === "ฝ่ายหญิง" || p === "ทั้งคู่"
+  })
+  const femaleActiveMeals = femaleMealsAll.filter((m) => String(m.date || m.Date || "").split("T")[0] === activeDate)
+  const femaleCalories = femaleActiveMeals.reduce((s, m) => s + Number(m.calories || m.Calories || 0), 0)
+  const femaleProtein = femaleActiveMeals.reduce((s, m) => s + Number(m.protein || m.Protein || 0), 0)
+  const femaleCarbs = femaleActiveMeals.reduce((s, m) => s + Number(m.carbs || m.Carbs || 0), 0)
+  const femaleFat = femaleActiveMeals.reduce((s, m) => s + Number(m.fat || m.Fat || 0), 0)
+  const femaleDeficitToday = femaleMaintenance - femaleCalories
+  const femaleIntakeDiff = femaleTargetIntake - femaleCalories
+
+  // Active Date Meals for display
+  const activeDateMeals = isAll
+    ? meals.filter((m) => String(m.date || m.Date || "").split("T")[0] === activeDate)
+    : (isMale ? maleActiveMeals : femaleActiveMeals)
 
   // Calculate totals for active date
-  const totalCalories = activeDateMeals.reduce((sum, m) => sum + Number(m.calories || m.Calories || 0), 0)
-  const totalProtein = activeDateMeals.reduce((sum, m) => sum + Number(m.protein || m.Protein || 0), 0)
-  const totalCarbs = activeDateMeals.reduce((sum, m) => sum + Number(m.carbs || m.Carbs || 0), 0)
-  const totalFat = activeDateMeals.reduce((sum, m) => sum + Number(m.fat || m.Fat || 0), 0)
+  const totalCalories = isAll ? (maleCalories + femaleCalories) : (isMale ? maleCalories : femaleCalories)
+  const totalProtein = isAll ? (maleProtein + femaleProtein) : (isMale ? maleProtein : femaleProtein)
+  const totalCarbs = isAll ? (maleCarbs + femaleCarbs) : (isMale ? maleCarbs : femaleCarbs)
+  const totalFat = isAll ? (maleFat + femaleFat) : (isMale ? maleFat : femaleFat)
   const calorieDiff = TARGET_CALORIES - totalCalories
+
+  // 🏆 Adherence Scoring (Who is following the plan better?)
+  const calculateScore = (
+    cals: number,
+    targetIntake: number,
+    maintenance: number,
+    targetDeficit: number,
+    prot: number,
+    targetProt: number,
+    hasEntries: boolean
+  ) => {
+    if (!hasEntries || cals === 0) return 0
+    let intakeScore = 40
+    if (cals > targetIntake) {
+      const overRatio = (cals - targetIntake) / targetIntake
+      intakeScore = Math.max(0, 40 - overRatio * 100 * 1.5)
+    }
+    const def = maintenance - cals
+    let defScore = 0
+    if (def >= targetDeficit) {
+      defScore = 40
+    } else if (def > 0) {
+      defScore = (def / targetDeficit) * 40
+    }
+    const protScore = Math.min(20, (prot / targetProt) * 20)
+    return Math.round(intakeScore + defScore + protScore)
+  }
+
+  const maleScore = calculateScore(
+    maleCalories,
+    maleTargetIntake,
+    maleMaintenance,
+    maleDeficitTarget,
+    maleProtein,
+    maleTargetProtein,
+    maleActiveMeals.length > 0
+  )
+
+  const femaleScore = calculateScore(
+    femaleCalories,
+    femaleTargetIntake,
+    femaleMaintenance,
+    femaleDeficitTarget,
+    femaleProtein,
+    femaleTargetProtein,
+    femaleActiveMeals.length > 0
+  )
+
+  // Leader / Winner Evaluation
+  let winner: "MALE" | "FEMALE" | "TIE" | "NONE" = "NONE"
+  let winnerTitle = ""
+  let winnerSubtitle = ""
+
+  if (maleActiveMeals.length > 0 && femaleActiveMeals.length > 0) {
+    if (Math.abs(maleScore - femaleScore) <= 2) {
+      winner = "TIE"
+      winnerTitle = "🤝 ทำตามแผนได้ยอดเยี่ยมเสมอกัน!"
+      winnerSubtitle = "ทั้งคู่มีวินัยและควบคุมโภชนาการได้ใกล้เคียงเป้าหมายอย่างน่าชื่นชม"
+    } else if (maleScore > femaleScore) {
+      winner = "MALE"
+      winnerTitle = "🏆 ฝ่ายชายทำตามแผนได้ดีกว่าวันนี้!"
+      winnerSubtitle = `ฝ่ายชายทำคะแนนวินัยโภชนาการได้ ${maleScore} คะแนน (ฝ่ายหญิง ${femaleScore} คะแนน) คุมแคลอรี่และตัดทอนได้ตามเป้าหมายมากกว่า`
+    } else {
+      winner = "FEMALE"
+      winnerTitle = "🏆 ฝ่ายหญิงทำตามแผนได้ดีกว่าวันนี้!"
+      winnerSubtitle = `ฝ่ายหญิงทำคะแนนวินัยโภชนาการได้ ${femaleScore} คะแนน (ฝ่ายชาย ${maleScore} คะแนน) คุมแคลอรี่และตัดทอนได้ตามเป้าหมายมากกว่า`
+    }
+  } else if (maleActiveMeals.length > 0) {
+    winner = "MALE"
+    winnerTitle = "👑 ฝ่ายชายนำอยู่ในวันนี้!"
+    winnerSubtitle = `ฝ่ายชายบันทึกอาหารแล้ว (${maleScore} คะแนน) รอฝ่ายหญิงบันทึกข้อมูลเพื่อสรุปผลเต็มรูปแบบ`
+  } else if (femaleActiveMeals.length > 0) {
+    winner = "FEMALE"
+    winnerTitle = "👑 ฝ่ายหญิงนำอยู่ในวันนี้!"
+    winnerSubtitle = `ฝ่ายหญิงบันทึกอาหารแล้ว (${femaleScore} คะแนน) รอฝ่ายชายบันทึกข้อมูลเพื่อสรุปผลเต็มรูปแบบ`
+  } else {
+    winner = "NONE"
+    winnerTitle = "⏳ รอเริ่มบันทึกมื้ออาหารของวันนี้"
+    winnerSubtitle = "เมื่อทั้งคู่เริ่มบันทึกมื้ออาหาร ระบบจะคำนวณคะแนนวินัยและประเมินผลการแข่งขันแบบ Real-Time!"
+  }
 
   // Doughnut Chart Data (Macro Breakdown)
   const macroChartData = {
@@ -213,24 +350,50 @@ export function DashboardView({
     last7DaysLabels.push(`${dayNames[d.getDay()]} (${d.getDate()})`)
   }
 
-  const weeklyCalories = last7Days.map((isoDate) => {
-    return personMeals
-      .filter((m) => String(m.date || m.Date || "").split("T")[0] === isoDate)
+  const weeklyMaleCalories = last7Days.map((isoDate) => {
+    return meals
+      .filter((m) => (m.person === "ฝ่ายชาย" || m.person === "ทั้งคู่") && String(m.date || m.Date || "").split("T")[0] === isoDate)
       .reduce((sum, m) => sum + Number(m.calories || m.Calories || 0), 0)
   })
 
-  const weeklyBarData = {
-    labels: last7DaysLabels,
-    datasets: [
-      {
-        label: "แคลอรี่ (kcal)",
-        data: weeklyCalories,
-        backgroundColor: isMale ? "rgba(16, 185, 129, 0.6)" : "rgba(236, 72, 153, 0.6)",
-        borderColor: isMale ? "#10b981" : "#ec4899",
-        borderRadius: 6,
-      },
-    ],
-  }
+  const weeklyFemaleCalories = last7Days.map((isoDate) => {
+    return meals
+      .filter((m) => (m.person === "ฝ่ายหญิง" || m.person === "ทั้งคู่") && String(m.date || m.Date || "").split("T")[0] === isoDate)
+      .reduce((sum, m) => sum + Number(m.calories || m.Calories || 0), 0)
+  })
+
+  const weeklyBarData = isAll
+    ? {
+        labels: last7DaysLabels,
+        datasets: [
+          {
+            label: "ฝ่ายชาย (kcal)",
+            data: weeklyMaleCalories,
+            backgroundColor: "rgba(16, 185, 129, 0.75)",
+            borderColor: "#10b981",
+            borderRadius: 6,
+          },
+          {
+            label: "ฝ่ายหญิง (kcal)",
+            data: weeklyFemaleCalories,
+            backgroundColor: "rgba(236, 72, 153, 0.75)",
+            borderColor: "#ec4899",
+            borderRadius: 6,
+          },
+        ],
+      }
+    : {
+        labels: last7DaysLabels,
+        datasets: [
+          {
+            label: "แคลอรี่ (kcal)",
+            data: isMale ? weeklyMaleCalories : weeklyFemaleCalories,
+            backgroundColor: isMale ? "rgba(16, 185, 129, 0.6)" : "rgba(236, 72, 153, 0.6)",
+            borderColor: isMale ? "#10b981" : "#ec4899",
+            borderRadius: 6,
+          },
+        ],
+      }
 
   return (
     <div className="space-y-6">
@@ -238,19 +401,36 @@ export function DashboardView({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-[#151d2f] to-[#151d2f] border border-[#26334d] rounded-2xl p-6 shadow-lg">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-2xl">{isMale ? "🏋️‍♂️" : "🧘‍♀️"}</span>
+            <span className="text-2xl">{isAll ? "👥" : isMale ? "🏋️‍♂️" : "🧘‍♀️"}</span>
             <h1 className="text-2xl font-bold text-white tracking-tight">
-              โภชนาการและแผนสุขภาพ: <span className={isMale ? "text-emerald-400" : "text-pink-400"}>{selectedPerson}</span>
+              โภชนาการและแผนสุขภาพ:{" "}
+              <span className={isAll ? "text-indigo-400" : isMale ? "text-emerald-400" : "text-pink-400"}>
+                {isAll ? "ภาพรวมคู่รัก (เปรียบเทียบ ชาย vs หญิง)" : selectedPerson}
+              </span>
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300 mt-1">
-            <span>🔥 เผาผลาญ: <strong className="text-white font-mono">{MAINTENANCE_CALORIES.toLocaleString()}</strong> kcal</span>
-            <span>•</span>
-            <span>🎯 ตัดทอน: <strong className="text-amber-300 font-mono">-{DEFICIT_TARGET.toLocaleString()}</strong> kcal</span>
-            <span>•</span>
-            <span className="bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-md font-semibold border border-emerald-500/30">
-              🍽️ ควรกินไม่เกิน: <span className="font-mono">{TARGET_CALORIES.toLocaleString()}</span> kcal/วัน
-            </span>
+            {isAll ? (
+              <>
+                <span>🔥 เผาผลาญรวม: <strong className="text-white font-mono">{MAINTENANCE_CALORIES.toLocaleString()}</strong> kcal</span>
+                <span>•</span>
+                <span>🎯 ตัดทอนรวม: <strong className="text-amber-300 font-mono">-{DEFICIT_TARGET.toLocaleString()}</strong> kcal</span>
+                <span>•</span>
+                <span className="bg-indigo-500/20 text-indigo-300 px-2.5 py-0.5 rounded-md font-semibold border border-indigo-500/30">
+                  🍽️ ควรกินรวมไม่เกิน: <span className="font-mono">{TARGET_CALORIES.toLocaleString()}</span> kcal/วัน (ชาย {maleTargetIntake} + หญิง {femaleTargetIntake})
+                </span>
+              </>
+            ) : (
+              <>
+                <span>🔥 เผาผลาญ: <strong className="text-white font-mono">{MAINTENANCE_CALORIES.toLocaleString()}</strong> kcal</span>
+                <span>•</span>
+                <span>🎯 ตัดทอน: <strong className="text-amber-300 font-mono">-{DEFICIT_TARGET.toLocaleString()}</strong> kcal</span>
+                <span>•</span>
+                <span className="bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-md font-semibold border border-emerald-500/30">
+                  🍽️ ควรกินไม่เกิน: <span className="font-mono">{TARGET_CALORIES.toLocaleString()}</span> kcal/วัน
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -288,6 +468,16 @@ export function DashboardView({
             >
               <span>🧘‍♀️</span> ฝ่ายหญิง
             </button>
+            <button
+              onClick={() => onSelectPerson("ALL")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                isAll
+                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-950"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <span>👥</span> รวม (เปรียบเทียบ)
+            </button>
           </div>
 
           {/* Action Buttons: Add Weight & Add Meal */}
@@ -308,6 +498,253 @@ export function DashboardView({
           </Button>
         </div>
       </div>
+
+      {/* 🏆 FEATURE: COUPLE ADHERENCE COMPARISON CARD (WHO IS DOING BETTER?) */}
+      {isAll && (
+        <Card className="bg-gradient-to-br from-[#131b2e] via-[#161d31] to-[#1c1836] border-2 border-indigo-500/40 shadow-2xl overflow-hidden">
+          <CardHeader className="border-b border-[#26334d] pb-4 bg-[#0d1424]/80">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
+                  <Trophy className="h-6 w-6 text-amber-400 animate-pulse" />
+                  สรุปผลการแข่งขันวินัยตามแผน: ใครทำตามแผนได้ดีกว่ากัน?
+                </CardTitle>
+                <CardDescription className="text-xs text-slate-300 mt-0.5">
+                  เปรียบเทียบความมีวินัยในการควบคุมแคลอรี่ไม่เกินโควต้า การตัดทอนแคลอรี่ตามเป้า และสารอาหารโปรตีน
+                </CardDescription>
+              </div>
+
+              {/* Winner Highlight Badge */}
+              <div className="flex items-center gap-2">
+                <Badge
+                  className={`text-xs px-3 py-1 font-semibold border shadow-md flex items-center gap-1.5 ${
+                    winner === "MALE"
+                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                      : winner === "FEMALE"
+                      ? "bg-pink-500/20 text-pink-300 border-pink-500/40"
+                      : winner === "TIE"
+                      ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
+                      : "bg-slate-800 text-slate-400 border-slate-700"
+                  }`}
+                >
+                  <Crown className="h-3.5 w-3.5 text-amber-400" />
+                  {winnerTitle}
+                </Badge>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-400 pt-1">
+              {winnerSubtitle}
+            </p>
+          </CardHeader>
+
+          <CardContent className="p-6 space-y-5">
+            {/* Side-by-Side Comparison Columns */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Male Column */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                winner === "MALE"
+                  ? "bg-emerald-950/20 border-emerald-500/50 shadow-lg shadow-emerald-950/30"
+                  : "bg-[#0b0f19] border-[#26334d]"
+              }`}>
+                <div className="flex items-center justify-between pb-3 border-b border-[#26334d]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🏋️‍♂️</span>
+                    <div>
+                      <div className="font-bold text-white text-sm flex items-center gap-1.5">
+                        ฝ่ายชาย (Male)
+                        {winner === "MALE" && (
+                          <Badge className="bg-amber-400/20 text-amber-300 border-amber-400/30 text-[10px] px-1.5 py-0">
+                            👑 ผู้นำวินัย
+                          </Badge>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-400">
+                        เป้า: เผาผลาญ {maleMaintenance} | ตัดทอน {maleDeficitTarget}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-xs text-slate-400 block">คะแนนวินัยวันนี้</span>
+                    <span className="text-lg font-extrabold text-emerald-400 font-mono">
+                      {maleScore} <span className="text-xs font-normal text-slate-400">/ 100</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Score Progress Bar */}
+                <div className="w-full bg-slate-800 rounded-full h-2 mt-3 overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-emerald-500 to-teal-400 h-2 rounded-full transition-all duration-700"
+                    style={{ width: `${Math.min(100, Math.max(5, maleScore))}%` }}
+                  />
+                </div>
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 gap-3 mt-4 text-xs">
+                  <div className="bg-[#121826] p-2.5 rounded-xl border border-[#26334d]">
+                    <span className="text-slate-400 block text-[11px]">🍽️ แคลอรี่ที่กินวันนี้:</span>
+                    <span className="text-sm font-bold text-white font-mono">{maleCalories} kcal</span>
+                    <span className="text-[10px] text-slate-400 block">โควต้า: ไม่เกิน {maleTargetIntake}</span>
+                    <Badge className={`text-[10px] mt-1 px-1.5 py-0 ${
+                      maleIntakeDiff >= 0
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                        : "bg-rose-500/20 text-rose-300 border-rose-500/30"
+                    }`}>
+                      {maleIntakeDiff >= 0 ? `เหลือ ${maleIntakeDiff} kcal` : `เกิน ${Math.abs(maleIntakeDiff)} kcal`}
+                    </Badge>
+                  </div>
+
+                  <div className="bg-[#121826] p-2.5 rounded-xl border border-[#26334d]">
+                    <span className="text-slate-400 block text-[11px]">🔥 ตัดทอนแคลอรี่วันนี้:</span>
+                    <span className="text-sm font-bold text-amber-300 font-mono">
+                      {maleDeficitToday >= 0 ? `-${maleDeficitToday} kcal` : `+${Math.abs(maleDeficitToday)} kcal`}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block">เป้าตัดทอน: -{maleDeficitTarget}</span>
+                    <Badge className={`text-[10px] mt-1 px-1.5 py-0 ${
+                      maleDeficitToday >= maleDeficitTarget
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                        : maleDeficitToday > 0
+                        ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                        : "bg-rose-500/20 text-rose-300 border-rose-500/30"
+                    }`}>
+                      {maleDeficitToday >= maleDeficitTarget ? "บรรลุเป้าตัดทอน ✨" : maleDeficitToday > 0 ? "ตัดทอนได้บางส่วน" : "Caloric Surplus"}
+                    </Badge>
+                  </div>
+
+                  <div className="bg-[#121826] p-2.5 rounded-xl border border-[#26334d]">
+                    <span className="text-slate-400 block text-[11px]">🥩 โปรตีนที่ได้รับ:</span>
+                    <span className="text-sm font-bold text-emerald-300 font-mono">
+                      {maleProtein.toFixed(1)}g <span className="text-xs text-slate-400">/ {maleTargetProtein}g</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 block">
+                      คิดเป็น {((maleProtein / maleTargetProtein) * 100).toFixed(0)}% ของเป้า
+                    </span>
+                  </div>
+
+                  <div className="bg-[#121826] p-2.5 rounded-xl border border-[#26334d]">
+                    <span className="text-slate-400 block text-[11px]">📋 บันทึกอาหารวันนี้:</span>
+                    <span className="text-sm font-bold text-white font-mono">{maleActiveMeals.length} มื้อ</span>
+                    <span className="text-[10px] text-slate-400 block">
+                      {maleActiveMeals.length > 0 ? "มีข้อมูลครบถ้วน" : "ยังไม่บันทึกมื้อ"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Female Column */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                winner === "FEMALE"
+                  ? "bg-pink-950/20 border-pink-500/50 shadow-lg shadow-pink-950/30"
+                  : "bg-[#0b0f19] border-[#26334d]"
+              }`}>
+                <div className="flex items-center justify-between pb-3 border-b border-[#26334d]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🧘‍♀️</span>
+                    <div>
+                      <div className="font-bold text-white text-sm flex items-center gap-1.5">
+                        ฝ่ายหญิง (Female)
+                        {winner === "FEMALE" && (
+                          <Badge className="bg-amber-400/20 text-amber-300 border-amber-400/30 text-[10px] px-1.5 py-0">
+                            👑 ผู้นำวินัย
+                          </Badge>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-400">
+                        เป้า: เผาผลาญ {femaleMaintenance} | ตัดทอน {femaleDeficitTarget}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-xs text-slate-400 block">คะแนนวินัยวันนี้</span>
+                    <span className="text-lg font-extrabold text-pink-400 font-mono">
+                      {femaleScore} <span className="text-xs font-normal text-slate-400">/ 100</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Score Progress Bar */}
+                <div className="w-full bg-slate-800 rounded-full h-2 mt-3 overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-pink-500 to-rose-400 h-2 rounded-full transition-all duration-700"
+                    style={{ width: `${Math.min(100, Math.max(5, femaleScore))}%` }}
+                  />
+                </div>
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 gap-3 mt-4 text-xs">
+                  <div className="bg-[#121826] p-2.5 rounded-xl border border-[#26334d]">
+                    <span className="text-slate-400 block text-[11px]">🍽️ แคลอรี่ที่กินวันนี้:</span>
+                    <span className="text-sm font-bold text-white font-mono">{femaleCalories} kcal</span>
+                    <span className="text-[10px] text-slate-400 block">โควต้า: ไม่เกิน {femaleTargetIntake}</span>
+                    <Badge className={`text-[10px] mt-1 px-1.5 py-0 ${
+                      femaleIntakeDiff >= 0
+                        ? "bg-pink-500/20 text-pink-300 border-pink-500/30"
+                        : "bg-rose-500/20 text-rose-300 border-rose-500/30"
+                    }`}>
+                      {femaleIntakeDiff >= 0 ? `เหลือ ${femaleIntakeDiff} kcal` : `เกิน ${Math.abs(femaleIntakeDiff)} kcal`}
+                    </Badge>
+                  </div>
+
+                  <div className="bg-[#121826] p-2.5 rounded-xl border border-[#26334d]">
+                    <span className="text-slate-400 block text-[11px]">🔥 ตัดทอนแคลอรี่วันนี้:</span>
+                    <span className="text-sm font-bold text-pink-300 font-mono">
+                      {femaleDeficitToday >= 0 ? `-${femaleDeficitToday} kcal` : `+${Math.abs(femaleDeficitToday)} kcal`}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block">เป้าตัดทอน: -{femaleDeficitTarget}</span>
+                    <Badge className={`text-[10px] mt-1 px-1.5 py-0 ${
+                      femaleDeficitToday >= femaleDeficitTarget
+                        ? "bg-pink-500/20 text-pink-300 border-pink-500/30"
+                        : femaleDeficitToday > 0
+                        ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                        : "bg-rose-500/20 text-rose-300 border-rose-500/30"
+                    }`}>
+                      {femaleDeficitToday >= femaleDeficitTarget ? "บรรลุเป้าตัดทอน ✨" : femaleDeficitToday > 0 ? "ตัดทอนได้บางส่วน" : "Caloric Surplus"}
+                    </Badge>
+                  </div>
+
+                  <div className="bg-[#121826] p-2.5 rounded-xl border border-[#26334d]">
+                    <span className="text-slate-400 block text-[11px]">🥩 โปรตีนที่ได้รับ:</span>
+                    <span className="text-sm font-bold text-pink-300 font-mono">
+                      {femaleProtein.toFixed(1)}g <span className="text-xs text-slate-400">/ {femaleTargetProtein}g</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 block">
+                      คิดเป็น {((femaleProtein / femaleTargetProtein) * 100).toFixed(0)}% ของเป้า
+                    </span>
+                  </div>
+
+                  <div className="bg-[#121826] p-2.5 rounded-xl border border-[#26334d]">
+                    <span className="text-slate-400 block text-[11px]">📋 บันทึกอาหารวันนี้:</span>
+                    <span className="text-sm font-bold text-white font-mono">{femaleActiveMeals.length} มื้อ</span>
+                    <span className="text-[10px] text-slate-400 block">
+                      {femaleActiveMeals.length > 0 ? "มีข้อมูลครบถ้วน" : "ยังไม่บันทึกมื้อ"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Coach Insight Summary Box */}
+            <div className="p-3.5 rounded-xl bg-[#0b0f19] border border-indigo-500/30 text-xs text-slate-300 flex items-start gap-2.5">
+              <Sparkles className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-white block mb-0.5">บทวิเคราะห์โภชนาการคู่รักประจำวัน (Couple AI Insights):</strong>
+                <span>
+                  {winner === "MALE"
+                    ? `ฝ่ายชายทำได้ยอดเยี่ยมกว่าด้วยการคุมแคลอรี่ได้ดี (${maleCalories} / ${maleTargetIntake} kcal) และตัดทอนได้ตามเป้า ${maleDeficitToday} kcal แนะนำฝ่ายหญิงให้โฟกัสที่การคุมโควต้าอาหารเพื่อให้ทั้งคู่บรรลุเป้าหมายไปด้วยกัน!`
+                    : winner === "FEMALE"
+                    ? `ฝ่ายหญิงทำได้ยอดเยี่ยมกว่าด้วยการคุมแคลอรี่ได้ดี (${femaleCalories} / ${femaleTargetIntake} kcal) และตัดทอนได้ตามเป้า ${femaleDeficitToday} kcal แนะนำฝ่ายชายให้โฟกัสที่การคุมโควต้าอาหารเพื่อให้ทั้งคู่บรรลุเป้าหมายไปด้วยกัน!`
+                    : winner === "TIE"
+                    ? "ทั้งคู่มีวินัยยอดเยี่ยมและทำตามแผนได้อย่างดีเยี่ยมในระดับเดียวกัน ช่วยกันรักษามาตรฐานนี้ไว้อย่างต่อเนื่อง!"
+                    : "บันทึกมื้ออาหารของวันนี้เพื่อรับผลวิเคราะห์และสรุปผลการเปรียบเทียบโภชนาการแบบ Real-Time"}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 🎯 FEATURE 1: CUMULATIVE FAT LOSS & CALORIE DEFICIT GOAL WIDGET */}
       <Card className="bg-gradient-to-br from-[#121a2d] to-[#151d2f] border border-emerald-500/30 shadow-xl overflow-hidden">
@@ -618,7 +1055,12 @@ export function DashboardView({
                     ticks: { color: "#94a3b8" },
                   },
                 },
-                plugins: { legend: { display: false } },
+                plugins: {
+                  legend: {
+                    display: isAll,
+                    labels: { color: "#94a3b8", font: { size: 11 } },
+                  },
+                },
               }}
             />
           </CardContent>
@@ -631,7 +1073,7 @@ export function DashboardView({
           <div>
             <CardTitle className="text-base font-semibold text-white flex items-center gap-2">
               <UtensilsCrossed className="h-4 w-4 text-emerald-400" />
-              มื้ออาหารประจำวันที่ {activeDate} ({selectedPerson} - {activeDateMeals.length} รายการ)
+              มื้ออาหารประจำวันที่ {activeDate} ({isAll ? "รวมทั้งคู่ ชาย & หญิง" : selectedPerson} - {activeDateMeals.length} รายการ)
             </CardTitle>
             <CardDescription className="text-slate-400 text-xs">
               ข้อมูลที่บันทึกไว้ใน Google Sheets (B หน้าจดบันทึก)
@@ -660,7 +1102,7 @@ export function DashboardView({
         <CardContent>
           {activeDateMeals.length === 0 ? (
             <div className="text-center py-8 border border-dashed border-[#26334d] rounded-xl">
-              <p className="text-slate-400 text-sm">ยังไม่มีมื้ออาหารที่บันทึกไว้สำหรับ {selectedPerson} ในวันที่ {activeDate}</p>
+              <p className="text-slate-400 text-sm">ยังไม่มีมื้ออาหารที่บันทึกไว้สำหรับ {isAll ? "ทั้งคู่" : selectedPerson} ในวันที่ {activeDate}</p>
               <Button
                 onClick={onOpenAddMeal}
                 variant="outline"
@@ -673,21 +1115,34 @@ export function DashboardView({
             <div className="divide-y divide-[#26334d]">
               {activeDateMeals.map((meal) => {
                 const id = meal.id || meal.ID
+                const isMaleMeal = meal.person === "ฝ่ายชาย"
                 return (
                   <div
                     key={id}
                     className="py-3 flex items-center justify-between gap-4 hover:bg-slate-800/30 px-2 rounded-lg transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="p-1 rounded-full bg-emerald-500/20 text-emerald-400">
+                      <div className={`p-1 rounded-full ${isMaleMeal ? "bg-emerald-500/20 text-emerald-400" : "bg-pink-500/20 text-pink-400"}`}>
                         <CheckCircle2 className="h-4 w-4" />
                       </div>
 
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-medium text-white">
                             {meal.foodName || meal.FoodName}
                           </span>
+                          {isAll && (
+                            <Badge
+                              variant="secondary"
+                              className={`text-[10px] whitespace-nowrap ${
+                                isMaleMeal
+                                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                                  : "bg-pink-500/20 text-pink-300 border-pink-500/30"
+                              }`}
+                            >
+                              {isMaleMeal ? "🏋️‍♂️ ชาย" : "🧘‍♀️ หญิง"}
+                            </Badge>
+                          )}
                           <Badge
                             variant="secondary"
                             className="text-[10px] bg-slate-800 text-slate-300 border-slate-700"

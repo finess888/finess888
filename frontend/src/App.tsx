@@ -400,7 +400,7 @@ export default function App() {
         onOpenChange={setAddMealOpen}
         onSave={handleSaveMeal}
         foods={foods}
-        defaultPerson={selectedPerson}
+        defaultPerson={selectedPerson === "ALL" ? "ฝ่ายชาย" : selectedPerson}
       />
 
       <AddFoodModal
@@ -413,7 +413,7 @@ export default function App() {
         open={addWeightOpen}
         onOpenChange={setAddWeightOpen}
         onSave={handleSaveWeight}
-        defaultPerson={selectedPerson}
+        defaultPerson={selectedPerson === "ALL" ? "ฝ่ายชาย" : selectedPerson}
       />
     </div>
   )
