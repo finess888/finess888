@@ -102,6 +102,14 @@ function doPost(e) {
         result = handleAddMeal(ss, payload);
         break;
       }
+      case 'DELETE_MEAL': {
+        result = handleDeleteMeal(ss, payload);
+        break;
+      }
+      case 'DELETE_MEALS_BY_DATE': {
+        result = handleDeleteMealsByDate(ss, payload);
+        break;
+      }
       case 'ADD_FOOD_ITEM': {
         result = handleAddFoodItem(ss, payload);
         break;
@@ -284,6 +292,126 @@ function handleAddMeal(ss, payload) {
     rowNumber: targetRow,
     meal: { date: payload.date, person, mealType, foodName, servings, calories, protein, carbs, fat, notes }
   };
+}
+
+function handleDeleteMeal(ss, payload) {
+  const logSheet = ss.getSheetByName(SHEET_DAILY_LOG) || ss.getSheets()[1];
+  const lastRow = logSheet.getLastRow();
+  if (lastRow < 4) {
+    return { success: true, message: 'No meal records found' };
+  }
+
+  const targetRow = Number(payload.rowNumber || 0);
+  const targetId = String(payload.id || '');
+  let rowIndexToDelete = -1;
+
+  if (targetRow >= 4 && targetRow <= lastRow) {
+    rowIndexToDelete = targetRow - 4;
+  } else if (targetId && targetId.startsWith('M-')) {
+    const rNum = parseInt(targetId.replace('M-', ''), 10);
+    if (rNum >= 4 && rNum <= lastRow) {
+      rowIndexToDelete = rNum - 4;
+    }
+  }
+
+  const numRows = lastRow - 3;
+  const mealRange = logSheet.getRange(4, 1, numRows, 10);
+  const values = mealRange.getValues();
+
+  const existingMeals = [];
+  for (let i = 0; i < values.length; i++) {
+    const foodName = values[i][3];
+    if (foodName && String(foodName).trim() !== '') {
+      existingMeals.push({ index: i, row: values[i] });
+    }
+  }
+
+  let filtered = [];
+  let deleted = false;
+  for (let i = 0; i < existingMeals.length; i++) {
+    const actualRowIndex = existingMeals[i].index;
+    if (actualRowIndex === rowIndexToDelete || (!deleted && targetId && 'M-' + (actualRowIndex + 4) === targetId)) {
+      deleted = true;
+    } else {
+      filtered.push(existingMeals[i].row);
+    }
+  }
+
+  // Clear existing A-J
+  mealRange.clearContent();
+
+  // Write remaining back
+  if (filtered.length > 0) {
+    logSheet.getRange(4, 1, filtered.length, 10).setValues(filtered);
+  }
+
+  return { success: true, deleted: deleted, remainingCount: filtered.length };
+}
+
+function handleDeleteMealsByDate(ss, payload) {
+  const logSheet = ss.getSheetByName(SHEET_DAILY_LOG) || ss.getSheets()[1];
+  const lastRow = logSheet.getLastRow();
+  if (lastRow < 4) {
+    return { success: true, count: 0, message: 'No meal records found' };
+  }
+
+  const rawTarget = String((payload && payload.date) || '2026-11-16').trim();
+  const numRows = lastRow - 3;
+  const mealRange = logSheet.getRange(4, 1, numRows, 10);
+  const values = mealRange.getValues();
+
+  const remaining = [];
+  let deletedCount = 0;
+
+  for (let i = 0; i < values.length; i++) {
+    const row = values[i];
+    const foodName = row[3];
+    if (!foodName || String(foodName).trim() === '') {
+      continue;
+    }
+
+    const rawDate = row[0];
+    let dateStr = '';
+    if (rawDate instanceof Date) {
+      dateStr = Utilities.formatDate(rawDate, 'Asia/Bangkok', 'yyyy-MM-dd');
+    } else if (rawDate) {
+      dateStr = String(rawDate).split('T')[0].trim();
+    }
+
+    const dayPart = dateStr.includes('-') ? dateStr.split('-')[2] : '';
+    const isMatch = (
+      dateStr === rawTarget ||
+      dateStr.endsWith('-' + rawTarget.padStart(2, '0')) ||
+      dayPart === rawTarget.padStart(2, '0') ||
+      (rawTarget === '16' && dayPart === '16')
+    );
+
+    if (isMatch) {
+      deletedCount++;
+    } else {
+      remaining.push(row);
+    }
+  }
+
+  // Clear columns A-J
+  mealRange.clearContent();
+
+  // Write back remaining meal records if any
+  if (remaining.length > 0) {
+    logSheet.getRange(4, 1, remaining.length, 10).setValues(remaining);
+  }
+
+  return {
+    success: true,
+    deletedCount: deletedCount,
+    remainingCount: remaining.length,
+    targetDate: rawTarget
+  };
+}
+
+function deleteMealsDate16() {
+  const ss = getSpreadsheet();
+  return handleDeleteMealsByDate(ss, { date: '2026-11-16' });
 }
 
 function handleAddWeightLog(ss, payload) {

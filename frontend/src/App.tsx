@@ -89,7 +89,14 @@ export default function App() {
 
   // Handle delete meal
   const handleDeleteMeal = async (id: string) => {
-    toast.warning("สามารถแก้ไขหรือลบแถวได้โดยตรงในสเปรดชีต Google")
+    try {
+      toast.loading("กำลังลบรายการอาหารจาก Google Sheets...", { id: "delete-meal" })
+      await callGasApi("DELETE_MEAL", { id })
+      toast.success("ลบรายการอาหารออกจากชีตเรียบร้อยแล้ว", { id: "delete-meal" })
+      await refetch()
+    } catch (err: any) {
+      toast.error(err.message || "เกิดข้อผิดพลาดในการลบรายการอาหาร", { id: "delete-meal" })
+    }
   }
 
   // Handle add food item

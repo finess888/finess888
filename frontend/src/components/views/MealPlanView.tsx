@@ -20,6 +20,7 @@ import {
   Utensils,
   ChevronDown,
   User,
+  Trash2,
 } from "lucide-react"
 import { formatThaiDate } from "@/lib/utils"
 
@@ -219,12 +220,13 @@ export function MealPlanView({
                 <TableHead className="text-right text-amber-300">คาร์บ</TableHead>
                 <TableHead className="text-right text-rose-300">ไขมัน</TableHead>
                 <TableHead className="text-slate-300">บันทึกเพิ่มเติม</TableHead>
+                <TableHead className="w-10 text-center text-slate-400">ลบ</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredMeals.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-10 text-slate-400">
+                  <TableCell colSpan={12} className="text-center py-10 text-slate-400">
                     ไม่พบรายการอาหารที่ตรงกับเงื่อนไขการค้นหา
                   </TableCell>
                 </TableRow>
@@ -307,6 +309,21 @@ export function MealPlanView({
                       {/* Notes */}
                       <TableCell className="text-xs text-slate-400 max-w-[180px] truncate">
                         {meal.notes || "-"}
+                      </TableCell>
+
+                      {/* Delete Action */}
+                      <TableCell className="text-center">
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`คุณต้องการลบ "${meal.foodName || meal.FoodName}" ออกจากแผนการกินใช่หรือไม่?`)) {
+                              onDeleteMeal(id)
+                            }
+                          }}
+                          className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                          title="ลบรายการนี้"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </TableCell>
                     </TableRow>
                   )
