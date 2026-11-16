@@ -157,25 +157,43 @@ export function analyzeProject(
   maintenanceCalories: number,
   targetIntakeCalories: number
 ): ProjectAnalysis {
-  const now = new Date()
-  const start = new Date(project.startDate)
-  const end = new Date(project.deadlineDate)
+  // Local current date in YYYY-MM-DD
+  const todayStr = new Date().toLocaleDateString("en-CA")
 
+  // Parse YYYY-MM-DD safely into UTC timestamps to avoid timezone shifts
+  const parseDateUtc = (dStr: string) => {
+    const parts = dStr.split("-").map(Number)
+    return Date.UTC(parts[0], parts[1] - 1, parts[2] || 1)
+  }
+
+  const startUtc = parseDateUtc(project.startDate)
+  const deadlineUtc = parseDateUtc(project.deadlineDate)
+  const todayUtc = parseDateUtc(todayStr)
   const msPerDay = 24 * 60 * 60 * 1000
-  const daysTotal = Math.max(1, Math.round((end.getTime() - start.getTime()) / msPerDay))
-  const daysElapsed = Math.max(0, Math.round((now.getTime() - start.getTime()) / msPerDay))
-  const daysRemaining = Math.max(0, Math.round((end.getTime() - now.getTime()) / msPerDay))
-  const isOverdue = now.getTime() > end.getTime()
+
+  // Total duration of the project (e.g. 28 days)
+  const daysTotal = Math.max(1, Math.round((deadlineUtc - startUtc) / msPerDay))
+
+  // For an ongoing active project, data is bounded by today (we cannot analyze future days)
+  const effectiveEndDate = project.completedAt
+    ? project.completedAt.split("T")[0]
+    : (todayStr < project.deadlineDate ? todayStr : project.deadlineDate)
+
+  // Days elapsed up to today (Day 1 counts as 1 day elapsed)
+  const elapsedDiff = Math.round((Math.min(todayUtc, deadlineUtc) - startUtc) / msPerDay)
+  const daysElapsed = Math.min(daysTotal, Math.max(1, elapsedDiff + 1))
+  const daysRemaining = Math.max(0, Math.round((deadlineUtc - todayUtc) / msPerDay))
+  const isOverdue = todayUtc > deadlineUtc
   const progressTimePct = Math.min(100, Math.round((daysElapsed / daysTotal) * 100))
 
-  // Filter healthLogs within project timeframe
+  // Filter healthLogs strictly within project timeframe up to effectiveEndDate (never into future)
   const isMale = project.person === "ฝ่ายชาย"
   const logsInRange = healthLogs.filter((log) => {
     const d = String(log.date || "").split("T")[0]
-    return d >= project.startDate && d <= (project.completedAt ? project.completedAt.split("T")[0] : project.deadlineDate)
+    return d >= project.startDate && d <= effectiveEndDate
   })
 
-  // Start weight & Latest weight
+  // Start weight & Latest weight up to today
   const weights = logsInRange
     .map((l) => (isMale ? l.maleWeight : l.femaleWeight))
     .filter((w) => w !== null && w !== undefined && w !== "" && !isNaN(Number(w)))
@@ -186,12 +204,12 @@ export function analyzeProject(
   const weightRemaining = Math.max(0, Number((project.targetFatLossKg - weightLost).toFixed(1)))
   const weightProgressPct = Math.min(100, Math.round((weightLost / project.targetFatLossKg) * 100))
 
-  // Filter meals in range for person
+  // Filter meals strictly in range up to effectiveEndDate (never into future)
   const personMealsInRange = meals.filter((m) => {
     const p = String(m.person || m.Person || "").trim()
     const matchPerson = p === project.person || p === "ทั้งคู่" || project.person === "ทั้งคู่"
     const d = String(m.date || m.Date || "").split("T")[0]
-    return matchPerson && d >= project.startDate && d <= project.deadlineDate
+    return matchPerson && d >= project.startDate && d <= effectiveEndDate
   })
 
   // Daily intakes
@@ -228,7 +246,7 @@ export function analyzeProject(
   const totalDeficitTarget = project.targetDeficitKcal || project.targetFatLossKg * 7500
   const deficitProgressPct = Math.min(100, Math.round((deficitAchieved / totalDeficitTarget) * 100))
 
-  // Activities from healthLogs
+  // Activities from healthLogs up to today
   const activities = logsInRange
     .map((l) => String(l.activity || "").trim())
     .filter((a) => a.length > 0 && a !== "-")

@@ -146,6 +146,16 @@ function doPost(e) {
         result = handleSaveProjects(ss, payload);
         break;
       }
+      case 'SAVE_WORKOUT_LOGS': {
+        PropertiesService.getScriptProperties().setProperty('WORKOUT_LOGS', JSON.stringify(payload));
+        result = { success: true };
+        break;
+      }
+      case 'SAVE_STEP_LOGS': {
+        PropertiesService.getScriptProperties().setProperty('STEP_LOGS', JSON.stringify(payload));
+        result = { success: true };
+        break;
+      }
       case 'SAVE_SETTINGS': {
         if (payload.newPasscode) {
           PropertiesService.getScriptProperties().setProperty('APP_PASSCODE', String(payload.newPasscode).trim());
@@ -297,6 +307,24 @@ function handleGetInitialData(ss) {
     } catch (e) {}
   }
 
+  // 6. Workout logs
+  let workoutLogs = null;
+  const rawWorkouts = PropertiesService.getScriptProperties().getProperty('WORKOUT_LOGS');
+  if (rawWorkouts) {
+    try {
+      workoutLogs = JSON.parse(rawWorkouts);
+    } catch (e) {}
+  }
+
+  // 7. Step logs
+  let stepLogs = null;
+  const rawSteps = PropertiesService.getScriptProperties().getProperty('STEP_LOGS');
+  if (rawSteps) {
+    try {
+      stepLogs = JSON.parse(rawSteps);
+    } catch (e) {}
+  }
+
   return {
     spreadsheetName: ss.getName(),
     foods: foods,
@@ -305,6 +333,8 @@ function handleGetInitialData(ss) {
     rawSheets: rawSheets,
     calorieSettings: calorieSettings,
     projects: projects,
+    workoutLogs: workoutLogs || [],
+    stepLogs: stepLogs || [],
     targets: {
       male: {
         calories: calorieSettings.male ? calorieSettings.male.maintenance : 2000,

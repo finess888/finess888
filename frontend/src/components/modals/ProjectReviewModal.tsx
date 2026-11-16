@@ -118,12 +118,17 @@ export function ProjectReviewModal({
     const allWorkouts = getWorkoutLogs()
     const allSteps = getDailyStepLogs()
 
-    // Filter by project person & date range
+    const todayStr = new Date().toLocaleDateString("en-CA")
+    const effectiveEndDate = currentProject.completedAt
+      ? currentProject.completedAt.split("T")[0]
+      : (todayStr < currentProject.deadlineDate ? todayStr : currentProject.deadlineDate)
+
+    // Filter by project person & date range strictly up to effectiveEndDate
     const filteredWorkouts = allWorkouts.filter((w) => {
       const matchPerson = currentProject.person === "ทั้งคู่" || w.person === currentProject.person
       const matchDate =
         (!currentProject.startDate || w.date >= currentProject.startDate) &&
-        (!currentProject.deadlineDate || w.date <= currentProject.deadlineDate)
+        (!effectiveEndDate || w.date <= effectiveEndDate)
       return matchPerson && matchDate
     })
 
@@ -131,7 +136,7 @@ export function ProjectReviewModal({
       const matchPerson = currentProject.person === "ทั้งคู่" || s.person === currentProject.person
       const matchDate =
         (!currentProject.startDate || s.date >= currentProject.startDate) &&
-        (!currentProject.deadlineDate || s.date <= currentProject.deadlineDate)
+        (!effectiveEndDate || s.date <= effectiveEndDate)
       return matchPerson && matchDate
     })
 
@@ -334,7 +339,7 @@ export function ProjectReviewModal({
                   <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px]">
                     {workoutStats && (workoutStats.totalWorkouts > 0 || workoutStats.totalSteps > 0)
                       ? `${workoutStats.totalWorkouts} ครั้ง • เดินเฉลี่ย ${workoutStats.avgStepsPerDay.toLocaleString()} ก้าว`
-                      : `บันทึกชีต ${analysis.activitiesCount} วัน`}
+                      : `${analysis.activitiesCount} / ${analysis.daysElapsed} วัน`}
                   </Badge>
                 </div>
 
@@ -377,17 +382,29 @@ export function ProjectReviewModal({
                     </>
                   ) : (
                     <>
-                      <p className="text-[11px] text-slate-400">
-                        {analysis.activitySamples.length > 0
-                          ? `ตัวอย่างบันทึก: ${analysis.activitySamples.join(", ")}`
-                          : "ยังไม่มีบันทึกกิจกรรมในช่วงโปรเจกต์นี้"}
-                      </p>
-                      <div className="flex justify-between pt-1">
-                        <span className="text-slate-400">ความสม่ำเสมอกิจกรรม:</span>
-                        <strong className="text-indigo-300 font-mono">
-                          {Math.round((analysis.activitiesCount / Math.max(1, analysis.daysElapsed)) * 100)}%
-                        </strong>
-                      </div>
+                      {analysis.activitySamples.length > 0 ? (
+                        <div className="space-y-1">
+                          <p className="text-[11px] text-slate-300">
+                            บันทึกกิจกรรมล่าสุด: <span className="text-white font-medium">{analysis.activitySamples.join(", ")}</span>
+                          </p>
+                          <div className="flex justify-between items-center pt-1 border-t border-[#26334d]/60">
+                            <span className="text-slate-400">ความสม่ำเสมอกิจกรรม:</span>
+                            <strong className="text-indigo-300 font-mono">
+                              {Math.min(100, Math.round((analysis.activitiesCount / Math.max(1, analysis.daysElapsed)) * 100))}%
+                              <span className="text-xs font-normal text-slate-400 ml-1">
+                                ({analysis.activitiesCount} จาก {analysis.daysElapsed} วันที่ผ่านมา)
+                              </span>
+                            </strong>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="py-2 text-center text-slate-400 text-xs space-y-1">
+                          <p>ยังไม่มีบันทึกการออกกำลังกายหรือกิจกรรมในช่วงโปรเจกต์นี้</p>
+                          <p className="text-[10px] text-slate-500">
+                            สามารถบันทึกผ่านเมนู "ออกกำลังกาย" หรือ "จดบันทึกก้าวเดิน" ได้ทันที
+                          </p>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

@@ -20,7 +20,7 @@ import { AddFoodModal } from "@/components/modals/AddFoodModal"
 import { AddWeightModal } from "@/components/modals/AddWeightModal"
 import { AddWorkoutModal } from "@/components/modals/AddWorkoutModal"
 import { AddStepModal } from "@/components/modals/AddStepModal"
-import { ExerciseItem } from "@/lib/exerciseDatabase"
+import { ExerciseItem, saveAllWorkoutLogs, saveAllStepLogs } from "@/lib/exerciseDatabase"
 import { saveCalorieSettings } from "@/lib/calorieSettings"
 import { saveProjects } from "@/lib/projectManager"
 import { Button } from "@/components/ui/button"
@@ -124,14 +124,22 @@ export default function App() {
         rawSheets: any[]
         calorieSettings?: any
         projects?: any[]
+        workoutLogs?: any[]
+        stepLogs?: any[]
       }>("GET_INITIAL_DATA")
 
-      // Sync cloud settings and projects across all devices
+      // Sync cloud settings, projects, and workouts across all devices
       if (data?.calorieSettings) {
         saveCalorieSettings(data.calorieSettings)
       }
       if (data?.projects && Array.isArray(data.projects)) {
         saveProjects(data.projects)
+      }
+      if (data?.workoutLogs && Array.isArray(data.workoutLogs)) {
+        saveAllWorkoutLogs(data.workoutLogs)
+      }
+      if (data?.stepLogs && Array.isArray(data.stepLogs)) {
+        saveAllStepLogs(data.stepLogs)
       }
 
       return data

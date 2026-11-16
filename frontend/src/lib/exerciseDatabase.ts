@@ -1,3 +1,5 @@
+import { callGasApi } from "@/api/gasClient"
+
 export type ExerciseCategory =
   | "คาร์ดิโอ (Cardio)"
   | "เวทเทรนนิ่ง - อก & หลังแขน"
@@ -380,8 +382,17 @@ export function saveWorkoutLog(entry: WorkoutEntry): void {
     const logs = getWorkoutLogs()
     logs.unshift(entry)
     localStorage.setItem(STORAGE_WORKOUTS_KEY, JSON.stringify(logs))
+    callGasApi("SAVE_WORKOUT_LOGS", logs).catch(() => {})
   } catch (err) {
     console.error("Error saving workout log:", err)
+  }
+}
+
+export function saveAllWorkoutLogs(logs: WorkoutEntry[]): void {
+  try {
+    localStorage.setItem(STORAGE_WORKOUTS_KEY, JSON.stringify(logs))
+  } catch (err) {
+    console.error("Error saving all workout logs:", err)
   }
 }
 
@@ -389,6 +400,7 @@ export function deleteWorkoutLog(id: string): void {
   try {
     const logs = getWorkoutLogs().filter((l) => l.id !== id)
     localStorage.setItem(STORAGE_WORKOUTS_KEY, JSON.stringify(logs))
+    callGasApi("SAVE_WORKOUT_LOGS", logs).catch(() => {})
   } catch (err) {
     console.error("Error deleting workout log:", err)
   }
@@ -420,8 +432,17 @@ export function saveDailyStepLog(entry: DailyStepLog): void {
       logs.unshift(entry)
     }
     localStorage.setItem(STORAGE_STEPS_KEY, JSON.stringify(logs))
+    callGasApi("SAVE_STEP_LOGS", logs).catch(() => {})
   } catch (err) {
     console.error("Error saving step log:", err)
+  }
+}
+
+export function saveAllStepLogs(logs: DailyStepLog[]): void {
+  try {
+    localStorage.setItem(STORAGE_STEPS_KEY, JSON.stringify(logs))
+  } catch (err) {
+    console.error("Error saving all step logs:", err)
   }
 }
 
