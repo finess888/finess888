@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { toast } from "sonner"
 
 interface AddMealModalProps {
@@ -38,6 +39,7 @@ export function AddMealModal({
   const [date, setDate] = React.useState(todayStr)
   const [person, setPerson] = React.useState(defaultPerson)
   const [mealType, setMealType] = React.useState("01. มื้อเช้า")
+  const [selectedFoodId, setSelectedFoodId] = React.useState("")
   const [foodName, setFoodName] = React.useState("")
   const [servings, setServings] = React.useState<number | "">(1)
   const [calories, setCalories] = React.useState<number | "">(350)
@@ -51,9 +53,18 @@ export function AddMealModal({
     setPerson(defaultPerson)
   }, [defaultPerson])
 
+  const foodOptions = React.useMemo(() => {
+    return foods.map((f) => ({
+      value: String(f.id || f.code || f.name),
+      label: `${f.name} [${f.category}] • ${f.calories} kcal (P: ${f.protein}g, C: ${f.carbs}g, F: ${f.fat}g)`
+    }))
+  }, [foods])
+
   // When selecting food from DB, auto-fill macros
   const handleSelectFood = (foodId: string) => {
-    const f = foods.find((item) => (item.id || item.ID || item.code) === foodId)
+    setSelectedFoodId(foodId)
+    if (!foodId) return
+    const f = foods.find((item) => String(item.id || item.code || item.name) === String(foodId))
     if (f) {
       setFoodName(f.name || f.Name || "")
       setCalories(Number(f.calories || f.Calories || 0))
@@ -90,6 +101,7 @@ export function AddMealModal({
 
       toast.success("บันทึกมื้ออาหารลงใน Google Sheets สำเร็จ!")
       onOpenChange(false)
+      setSelectedFoodId("")
       setFoodName("")
       setNotes("")
     } catch (err: any) {
@@ -138,22 +150,22 @@ export function AddMealModal({
             </div>
           </div>
 
-          {/* Quick select from Food DB */}
+          {/* Quick select from Food DB with Type to Search */}
           {foods.length > 0 && (
             <div className="space-y-1.5">
-              <Label className="text-xs text-slate-400">เลือกด่วนจากคลังเมนูอาหาร (A หน้าเก็บเมนูอาหาร)</Label>
-              <select
-                className="w-full h-9 rounded-md bg-[#0b0f19] border border-[#26334d] px-3 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                onChange={(e) => handleSelectFood(e.target.value)}
-                defaultValue=""
-              >
-                <option value="">-- เลือกเมนูในคลังเพื่อเติมแคลอรี่และสารอาหารอัตโนมัติ --</option>
-                {foods.map((f) => (
-                  <option key={f.id || f.code} value={f.id || f.code}>
-                    {f.name} ({f.category}) - {f.calories} kcal [P: {f.protein}g]
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-emerald-400 font-medium flex items-center gap-1.5">
+                  <span>🔍</span> เลือกด่วนจากคลังเมนูอาหาร (A หน้าเก็บเมนูอาหาร)
+                </Label>
+                <span className="text-[10px] text-slate-400">พิมพ์ค้นหาได้ (Type to search)</span>
+              </div>
+              <SearchableSelect
+                options={foodOptions}
+                value={selectedFoodId}
+                onChange={handleSelectFood}
+                placeholder="-- พิมพ์ชื่อเมนูอาหารเพื่อค้นหาด่วน --"
+                searchPlaceholder="พิมพ์ค้นหา เช่น อกไก่, ข้าวสวย, Plante, ไข่ดาว, หมู..."
+              />
             </div>
           )}
 

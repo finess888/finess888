@@ -61,7 +61,7 @@ export function SearchableSelect({
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          "flex h-10 w-full items-center justify-between rounded-lg border border-[#26334d] bg-[#0b1120] px-3 py-2 text-sm text-slate-100 shadow-sm transition-colors hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer",
+          "flex h-10 w-full items-center justify-between rounded-lg border border-[#26334d] bg-[#0b1120] px-3 py-2 text-sm text-slate-100 shadow-sm transition-colors hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer",
           !selectedOption && "text-slate-400"
         )}
       >
@@ -100,7 +100,7 @@ export function SearchableSelect({
           <div className="max-h-56 overflow-y-auto p-1">
             {filtered.length === 0 ? (
               <div className="py-4 text-center text-xs text-slate-500">
-                ไม่พบข้อมูล
+                ไม่พบรายการอาหารที่ตรงกับคำค้นหา
               </div>
             ) : (
               filtered.map((opt) => {
@@ -117,12 +117,12 @@ export function SearchableSelect({
                     className={cn(
                       "flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-sm transition-colors cursor-pointer",
                       isSelected
-                        ? "bg-indigo-600/20 text-indigo-300 font-medium"
+                        ? "bg-emerald-600/20 text-emerald-300 font-medium"
                         : "text-slate-200 hover:bg-slate-800/80"
                     )}
                   >
                     <span className="truncate">{opt.label}</span>
-                    {isSelected && <Check className="h-4 w-4 shrink-0 text-indigo-400" />}
+                    {isSelected && <Check className="h-4 w-4 shrink-0 text-emerald-400" />}
                   </button>
                 )
               })
