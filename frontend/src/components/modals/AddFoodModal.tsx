@@ -18,6 +18,7 @@ interface AddFoodModalProps {
 }
 
 const CATEGORIES = [
+  "EAT AM ARE",
   "โปรตีน",
   "คาร์โบไฮเดรต",
   "ผัก",

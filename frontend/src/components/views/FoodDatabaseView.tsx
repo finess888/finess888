@@ -27,17 +27,15 @@ export function FoodDatabaseView({
   const [searchTerm, setSearchTerm] = React.useState("")
   const [selectedCategory, setSelectedCategory] = React.useState("ALL")
 
-  const categories = [
-    "ALL",
-    "โปรตีน",
-    "คาร์โบไฮเดรต",
-    "ผัก",
-    "ผลไม้",
-    "ไขมันดี",
-    "อาหารเสริม",
-    "เครื่องดื่ม",
-    "ทั่วไป",
-  ]
+  const categories = React.useMemo(() => {
+    const list = ["ALL", "EAT AM ARE"]
+    const foundCats = new Set<string>()
+    foods.forEach((f) => {
+      const c = String(f.Category || f.category || "").trim()
+      if (c && !list.includes(c)) foundCats.add(c)
+    })
+    return [...list, ...Array.from(foundCats)]
+  }, [foods])
 
   const filteredFoods = foods.filter((f) => {
     const name = String(f.Name || f.name || "").toLowerCase()
