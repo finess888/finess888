@@ -472,11 +472,12 @@ export default function App() {
               meals={meals}
               foods={foods}
               healthLogs={healthLogs}
-              selectedPerson={selectedPerson}
+              selectedPerson="ALL"
               onSelectPerson={setSelectedPerson}
-              onOpenAddMeal={(date) => {
+              onOpenAddMeal={(date, person) => {
                 setSelectedFoodForMeal(null)
                 setSelectedDateForMeal(date || "")
+                if (person) setSelectedPerson(person)
                 setAddMealOpen(true)
               }}
               onOpenAddStep={() => setAddStepOpen(true)}

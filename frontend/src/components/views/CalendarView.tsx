@@ -31,6 +31,8 @@ import {
   Beef,
   Wheat,
   Droplet,
+  Users,
+  Heart,
 } from "lucide-react"
 import { formatThaiDate, THAI_MONTHS, THAI_DAYS } from "@/lib/utils"
 import { getCalorieSettings, getIntakeTarget } from "@/lib/calorieSettings"
@@ -42,12 +44,29 @@ interface CalendarViewProps {
   healthLogs: any[]
   selectedPerson?: string
   onSelectPerson?: (person: string) => void
-  onOpenAddMeal?: (date?: string) => void
+  onOpenAddMeal?: (date?: string, person?: string) => void
   onOpenAddStep?: (date?: string) => void
   onOpenAddWeight?: (date?: string) => void
 }
 
 type CriteriaType = "calories" | "steps" | "protein" | "all"
+
+interface PersonDayStats {
+  meals: any[]
+  totalCalories: number
+  totalProtein: number
+  totalCarbs: number
+  totalFat: number
+  targetCalories: number
+  targetSteps: number
+  targetProtein: number
+  stepCount: number
+  weight: number | null
+  calorieDiff: number // target - actual
+  status: "good" | "bad" | "unrecorded" | "future"
+  statusLabel: string
+  statusReason: string
+}
 
 interface DayData {
   dateStr: string
@@ -55,27 +74,28 @@ interface DayData {
   isToday: boolean
   isFuture: boolean
   dayOfWeek: number
-  dayMeals: any[]
-  totalCalories: number
-  totalProtein: number
-  totalCarbs: number
-  totalFat: number
-  stepCount: number
-  weight: number | null
-  targetCalories: number
-  targetSteps: number
-  targetProtein: number
-  calorieDiff: number // target - actual
-  status: "good" | "bad" | "unrecorded" | "future"
-  statusLabel: string
-  statusReason: string
+  male: PersonDayStats
+  female: PersonDayStats
+  coupleStatus: "both_good" | "male_only" | "female_only" | "both_bad" | "partial_unrecorded" | "unrecorded" | "future"
+  coupleStatusLabel: string
+  coupleStatusBadgeColor: string
+  // Active filtered view helpers
+  activeStatus: "good" | "bad" | "unrecorded" | "future"
+  activeLabel: string
+  activeCalories: number
+  activeTargetCalories: number
+  activeCalorieDiff: number
+  activeMealsCount: number
+  activeStepCount: number
+  activeProtein: number
+  activeWeight: number | null
 }
 
 export function CalendarView({
   meals,
   foods,
   healthLogs,
-  selectedPerson = "ฝ่ายชาย",
+  selectedPerson = "ALL",
   onSelectPerson,
   onOpenAddMeal,
   onOpenAddStep,
@@ -88,8 +108,8 @@ export function CalendarView({
   const [selectedYear, setSelectedYear] = React.useState<number>(today.getFullYear())
   const [selectedMonth, setSelectedMonth] = React.useState<number>(today.getMonth()) // 0 - 11
 
-  // Person filter
-  const [personFilter, setPersonFilter] = React.useState<string>(selectedPerson)
+  // Person filter - Default to "ALL" (รวมชายหญิง)
+  const [personFilter, setPersonFilter] = React.useState<string>("ALL")
 
   // Evaluation criteria
   const [criteria, setCriteria] = React.useState<CriteriaType>("calories")
@@ -97,6 +117,7 @@ export function CalendarView({
   // Selected day for modal details
   const [selectedDay, setSelectedDay] = React.useState<DayData | null>(null)
   const [dayModalOpen, setDayModalOpen] = React.useState(false)
+  const [detailTab, setDetailTab] = React.useState<"male" | "female" | "both">("both")
 
   // Calorie & Target settings
   const calorieSettings = getCalorieSettings()
@@ -106,42 +127,15 @@ export function CalendarView({
   const maleTargetIntake = getIntakeTarget(maleSettings) // e.g. 2000 - 300 = 1700
   const femaleTargetIntake = getIntakeTarget(femaleSettings) // e.g. 1700 - 300 = 1400
 
+  const maleStepTarget = maleSettings.stepGoal || 8000
+  const femaleStepTarget = femaleSettings.stepGoal || 8000
+
+  const maleProteinTarget = maleSettings.protein || 120
+  const femaleProteinTarget = femaleSettings.protein || 104
+
   const isFemale = personFilter === "ฝ่ายหญิง"
   const isMale = personFilter === "ฝ่ายชาย"
   const isAll = personFilter === "ALL"
-
-  // Base Targets based on person filter
-  const targetCalories = isAll
-    ? maleTargetIntake + femaleTargetIntake
-    : isFemale
-    ? femaleTargetIntake
-    : maleTargetIntake
-
-  const targetSteps = isAll
-    ? (maleSettings.stepGoal || 8000) + (femaleSettings.stepGoal || 8000)
-    : isFemale
-    ? femaleSettings.stepGoal || 8000
-    : maleSettings.stepGoal || 8000
-
-  const targetProtein = isAll
-    ? (maleSettings.protein || 120) + (femaleSettings.protein || 104)
-    : isFemale
-    ? femaleSettings.protein || 104
-    : maleSettings.protein || 120
-
-  // Keep person filter in sync
-  React.useEffect(() => {
-    if (selectedPerson) {
-      setPersonFilter(selectedPerson)
-    }
-  }, [selectedPerson])
-
-  const handlePersonSwitch = (p: string) => {
-    setPersonFilter(p)
-    if (onSelectPerson && (p === "ฝ่ายชาย" || p === "ฝ่ายหญิง")) {
-      onSelectPerson(p)
-    }
-  }
 
   // Month navigation handlers
   const handlePrevMonth = () => {
@@ -167,6 +161,68 @@ export function CalendarView({
     setSelectedMonth(today.getMonth())
   }
 
+  // Evaluate person day
+  const evaluatePersonDay = (
+    personMeals: any[],
+    stepCount: number,
+    targetCal: number,
+    targetStep: number,
+    targetProt: number,
+    isFuture: boolean
+  ): { status: "good" | "bad" | "unrecorded" | "future"; statusLabel: string; statusReason: string } => {
+    const totalCal = personMeals.reduce((s, m) => s + (Number(m.calories || m.Calories) || 0), 0)
+    const totalProt = personMeals.reduce((s, m) => s + (Number(m.protein || m.Protein) || 0), 0)
+    const diff = targetCal - totalCal
+    const hasMeals = personMeals.length > 0
+    const hasSteps = stepCount > 0
+
+    if (isFuture) {
+      return { status: "future", statusLabel: "รอสรุป", statusReason: "ยังไม่ถึงวัน" }
+    }
+
+    if (criteria === "calories") {
+      if (!hasMeals) {
+        return { status: "unrecorded", statusLabel: "ยังไม่จด", statusReason: "ยังไม่มีบันทึกมื้ออาหาร" }
+      }
+      if (totalCal <= targetCal) {
+        return { status: "good", statusLabel: "คุมดี ✅", statusReason: `อยู่ในโควต้า (เหลือ ${diff.toLocaleString()} kcal)` }
+      }
+      return { status: "bad", statusLabel: "เกินเป้า ❌", statusReason: `กินเกิน +${Math.abs(diff).toLocaleString()} kcal` }
+    }
+
+    if (criteria === "steps") {
+      if (!hasSteps) {
+        return { status: "unrecorded", statusLabel: "ยังไม่จด", statusReason: "ยังไม่มีบันทึกก้าว" }
+      }
+      if (stepCount >= targetStep) {
+        return { status: "good", statusLabel: "ครบก้าว ✅", statusReason: `เดินได้ ${stepCount.toLocaleString()} / เป้า ${targetStep.toLocaleString()} ก้าว` }
+      }
+      return { status: "bad", statusLabel: "ขาดก้าว ❌", statusReason: `ขาดอีก ${(targetStep - stepCount).toLocaleString()} ก้าว` }
+    }
+
+    if (criteria === "protein") {
+      if (!hasMeals) {
+        return { status: "unrecorded", statusLabel: "ยังไม่จด", statusReason: "ยังไม่มีบันทึกอาหาร" }
+      }
+      if (totalProt >= targetProt) {
+        return { status: "good", statusLabel: "โปรตีนถึง ✅", statusReason: `ได้โปรตีน ${totalProt.toFixed(1)}g / เป้า ${targetProt}g` }
+      }
+      return { status: "bad", statusLabel: "ขาดโปรตีน ❌", statusReason: `ขาดอีก ${(targetProt - totalProt).toFixed(1)}g` }
+    }
+
+    // Criteria: "all"
+    if (!hasMeals) {
+      return { status: "unrecorded", statusLabel: "ยังไม่จด", statusReason: "ยังไม่มีบันทึกอาหาร" }
+    }
+    if (totalCal <= targetCal) {
+      if (stepCount >= targetStep || totalProt >= targetProt) {
+        return { status: "good", statusLabel: "ดีเยี่ยม 🌟", statusReason: "คุมแคลอรี่ได้ดีและถึงเป้ากิจกรรม/โปรตีน" }
+      }
+      return { status: "good", statusLabel: "คุมดี ✅", statusReason: "แคลอรี่อยู่ในโควต้า" }
+    }
+    return { status: "bad", statusLabel: "เกินเป้า ❌", statusReason: `กินเกิน +${Math.abs(diff).toLocaleString()} kcal` }
+  }
+
   // Generate days in the selected month
   const monthDays: DayData[] = React.useMemo(() => {
     const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate()
@@ -184,133 +240,182 @@ export function CalendarView({
       const isToday = dateStr === todayStr
       const isFuture = dateStr > todayStr
 
-      // Meals on this date
-      const dayMeals = meals.filter((m) => {
+      // Male data
+      const maleMeals = meals.filter((m) => {
         const mDate = String(m.date || m.Date || "").split("T")[0]
         const mPerson = String(m.person || m.Person || "").trim()
-        const matchesDate = mDate === dateStr
-        const matchesPerson = isAll || mPerson === personFilter || mPerson === "ทั้งคู่"
-        return matchesDate && matchesPerson
+        return mDate === dateStr && (mPerson === "ฝ่ายชาย" || mPerson === "ทั้งคู่")
       })
+      const maleSteps = allStepLogs
+        .filter((s) => s.date === dateStr && s.person === "ฝ่ายชาย")
+        .reduce((sum, s) => sum + (Number(s.steps) || 0), 0)
 
-      // Health log on this date
-      const dayHealth = healthLogs.find((h) => {
-        const hDate = String(h.date || h.Date || "").split("T")[0]
-        return hDate === dateStr
+      const maleCals = maleMeals.reduce((s, m) => s + (Number(m.calories || m.Calories) || 0), 0)
+      const maleProt = Number(maleMeals.reduce((s, m) => s + (Number(m.protein || m.Protein) || 0), 0).toFixed(1))
+      const maleCarb = Number(maleMeals.reduce((s, m) => s + (Number(m.carbs || m.Carbs) || 0), 0).toFixed(1))
+      const maleFat = Number(maleMeals.reduce((s, m) => s + (Number(m.fat || m.Fat) || 0), 0).toFixed(1))
+
+      const dayHealth = healthLogs.find((h) => String(h.date || h.Date || "").split("T")[0] === dateStr)
+      const maleWeight = dayHealth?.maleWeight || null
+      const femaleWeight = dayHealth?.femaleWeight || null
+
+      const maleEval = evaluatePersonDay(
+        maleMeals,
+        maleSteps,
+        maleTargetIntake,
+        maleStepTarget,
+        maleProteinTarget,
+        isFuture
+      )
+
+      const maleStats: PersonDayStats = {
+        meals: maleMeals,
+        totalCalories: maleCals,
+        totalProtein: maleProt,
+        totalCarbs: maleCarb,
+        totalFat: maleFat,
+        targetCalories: maleTargetIntake,
+        targetSteps: maleStepTarget,
+        targetProtein: maleProteinTarget,
+        stepCount: maleSteps,
+        weight: maleWeight,
+        calorieDiff: maleTargetIntake - maleCals,
+        status: maleEval.status,
+        statusLabel: maleEval.statusLabel,
+        statusReason: maleEval.statusReason,
+      }
+
+      // Female data
+      const femaleMeals = meals.filter((m) => {
+        const mDate = String(m.date || m.Date || "").split("T")[0]
+        const mPerson = String(m.person || m.Person || "").trim()
+        return mDate === dateStr && (mPerson === "ฝ่ายหญิง" || mPerson === "ทั้งคู่")
       })
+      const femaleSteps = allStepLogs
+        .filter((s) => s.date === dateStr && s.person === "ฝ่ายหญิง")
+        .reduce((sum, s) => sum + (Number(s.steps) || 0), 0)
 
-      // Step log on this date
-      const daySteps = allStepLogs.filter((s) => {
-        const matchesDate = s.date === dateStr
-        const matchesPerson = isAll || s.person === personFilter
-        return matchesDate && matchesPerson
-      })
+      const femaleCals = femaleMeals.reduce((s, m) => s + (Number(m.calories || m.Calories) || 0), 0)
+      const femaleProt = Number(femaleMeals.reduce((s, m) => s + (Number(m.protein || m.Protein) || 0), 0).toFixed(1))
+      const femaleCarb = Number(femaleMeals.reduce((s, m) => s + (Number(m.carbs || m.Carbs) || 0), 0).toFixed(1))
+      const femaleFat = Number(femaleMeals.reduce((s, m) => s + (Number(m.fat || m.Fat) || 0), 0).toFixed(1))
 
-      const totalCalories = dayMeals.reduce(
-        (sum, m) => sum + (Number(m.calories || m.Calories) || 0),
-        0
+      const femaleEval = evaluatePersonDay(
+        femaleMeals,
+        femaleSteps,
+        femaleTargetIntake,
+        femaleStepTarget,
+        femaleProteinTarget,
+        isFuture
       )
-      const totalProtein = dayMeals.reduce(
-        (sum, m) => sum + (Number(m.protein || m.Protein) || 0),
-        0
-      )
-      const totalCarbs = dayMeals.reduce(
-        (sum, m) => sum + (Number(m.carbs || m.Carbs) || 0),
-        0
-      )
-      const totalFat = dayMeals.reduce((sum, m) => sum + (Number(m.fat || m.Fat) || 0), 0)
 
-      const stepCount = daySteps.reduce((sum, s) => sum + (Number(s.steps) || 0), 0)
+      const femaleStats: PersonDayStats = {
+        meals: femaleMeals,
+        totalCalories: femaleCals,
+        totalProtein: femaleProt,
+        totalCarbs: femaleCarb,
+        totalFat: femaleFat,
+        targetCalories: femaleTargetIntake,
+        targetSteps: femaleStepTarget,
+        targetProtein: femaleProteinTarget,
+        stepCount: femaleSteps,
+        weight: femaleWeight,
+        calorieDiff: femaleTargetIntake - femaleCals,
+        status: femaleEval.status,
+        statusLabel: femaleEval.statusLabel,
+        statusReason: femaleEval.statusReason,
+      }
 
-      const weight = isAll
-        ? (dayHealth?.maleWeight || 0) + (dayHealth?.femaleWeight || 0) || null
-        : isFemale
-        ? dayHealth?.femaleWeight || null
-        : dayHealth?.maleWeight || null
-
-      const calorieDiff = targetCalories - totalCalories
-      const hasMealData = dayMeals.length > 0
-      const hasStepData = stepCount > 0
-
-      // Evaluate Good vs Bad based on selected criteria
-      let status: "good" | "bad" | "unrecorded" | "future" = "unrecorded"
-      let statusLabel = ""
-      let statusReason = ""
+      // Couple evaluation (รวมชายหญิง)
+      let coupleStatus: DayData["coupleStatus"] = "unrecorded"
+      let coupleStatusLabel = "ยังไม่บันทึก"
+      let coupleStatusBadgeColor = "bg-slate-700 text-slate-300"
 
       if (isFuture) {
-        status = "future"
-        statusLabel = "รอสรุป"
-        statusReason = "ยังไม่ถึงวัน"
-      } else if (!hasMealData && !hasStepData) {
-        status = "unrecorded"
-        statusLabel = "ยังไม่บันทึก"
-        statusReason = "ไม่มีข้อมูลมื้ออาหารหรือกิจกรรมในวันนี้นี้"
+        coupleStatus = "future"
+        coupleStatusLabel = "รอสรุป"
+        coupleStatusBadgeColor = "bg-slate-800/60 text-slate-500"
+      } else if (maleStats.status === "good" && femaleStats.status === "good") {
+        coupleStatus = "both_good"
+        coupleStatusLabel = "🌟 ดีทั้งคู่ ✅"
+        coupleStatusBadgeColor = "bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-extrabold"
+      } else if (maleStats.status === "good" && femaleStats.status === "bad") {
+        coupleStatus = "male_only"
+        coupleStatusLabel = "🏋️‍♂️ ชายดี (หญิงเกิน)"
+        coupleStatusBadgeColor = "bg-amber-600 text-white"
+      } else if (femaleStats.status === "good" && maleStats.status === "bad") {
+        coupleStatus = "female_only"
+        coupleStatusLabel = "🧘‍♀️ หญิงดี (ชายเกิน)"
+        coupleStatusBadgeColor = "bg-pink-600 text-white"
+      } else if (maleStats.status === "bad" && femaleStats.status === "bad") {
+        coupleStatus = "both_bad"
+        coupleStatusLabel = "❌ หลุดคู่"
+        coupleStatusBadgeColor = "bg-rose-600 text-white"
+      } else if (maleStats.status === "good" || femaleStats.status === "good") {
+        coupleStatus = maleStats.status === "good" ? "male_only" : "female_only"
+        coupleStatusLabel = maleStats.status === "good" ? "🏋️‍♂️ ชายดี" : "🧘‍♀️ หญิงดี"
+        coupleStatusBadgeColor = maleStats.status === "good" ? "bg-emerald-600 text-white" : "bg-pink-600 text-white"
+      } else if (maleStats.status === "bad" || femaleStats.status === "bad") {
+        coupleStatus = "both_bad"
+        coupleStatusLabel = maleStats.status === "bad" ? "⚠️ ชายเกิน" : "⚠️ หญิงเกิน"
+        coupleStatusBadgeColor = "bg-rose-600 text-white"
       } else {
-        // Active evaluations
-        if (criteria === "calories") {
-          if (!hasMealData) {
-            status = "unrecorded"
-            statusLabel = "ยังไม่บันทึกอาหาร"
-            statusReason = "ยังไม่มีบันทึกมื้ออาหาร"
-          } else if (totalCalories <= targetCalories) {
-            status = "good"
-            statusLabel = "คุมดี ✅"
-            statusReason = `อยู่ในโควต้า (เหลือ ${calorieDiff.toLocaleString()} kcal)`
-          } else {
-            status = "bad"
-            statusLabel = "เกินเป้า ⚠️"
-            statusReason = `กินเกินโควต้า +${Math.abs(calorieDiff).toLocaleString()} kcal`
-          }
-        } else if (criteria === "steps") {
-          if (!hasStepData) {
-            status = "unrecorded"
-            statusLabel = "ไม่มีบันทึกก้าว"
-            statusReason = "ยังไม่ได้กรอกจำนวนก้าว"
-          } else if (stepCount >= targetSteps) {
-            status = "good"
-            statusLabel = "ครบก้าว ✅"
-            statusReason = `เดินได้ ${stepCount.toLocaleString()} / เป้า ${targetSteps.toLocaleString()} ก้าว`
-          } else {
-            status = "bad"
-            statusLabel = "ขาดก้าว ⚠️"
-            statusReason = `ขาดอีก ${(targetSteps - stepCount).toLocaleString()} ก้าว`
-          }
-        } else if (criteria === "protein") {
-          if (!hasMealData) {
-            status = "unrecorded"
-            statusLabel = "ไม่มีบันทึกอาหาร"
-            statusReason = "ยังไม่ได้บันทึกอาหาร"
-          } else if (totalProtein >= targetProtein) {
-            status = "good"
-            statusLabel = "โปรตีนถึง ✅"
-            statusReason = `ได้โปรตีน ${totalProtein.toFixed(1)}g / เป้า ${targetProtein}g`
-          } else {
-            status = "bad"
-            statusLabel = "โปรตีนขาด ⚠️"
-            statusReason = `ขาดโปรตีนอีก ${(targetProtein - totalProtein).toFixed(1)}g`
-          }
-        } else {
-          // Criteria === "all" (Composite)
-          if (!hasMealData) {
-            status = "unrecorded"
-            statusLabel = "ยังไม่บันทึก"
-            statusReason = "ไม่มีบันทึกอาหาร"
-          } else if (totalCalories <= targetCalories) {
-            if (stepCount >= targetSteps || totalProtein >= targetProtein) {
-              status = "good"
-              statusLabel = "ดีเยี่ยม 🌟"
-              statusReason = "คุมแคลอรี่ได้ดี และทำเป้ากิจกรรม/โปรตีนสำเร็จ"
-            } else {
-              status = "good"
-              statusLabel = "คุมดี ✅"
-              statusReason = "แคลอรี่อยู่ในโควต้า"
-            }
-          } else {
-            status = "bad"
-            statusLabel = "หลุดเป้า ⚠️"
-            statusReason = `กินเกินไป +${Math.abs(calorieDiff).toLocaleString()} kcal`
-          }
-        }
+        coupleStatus = "unrecorded"
+        coupleStatusLabel = "--"
+        coupleStatusBadgeColor = "bg-slate-800 text-slate-500"
+      }
+
+      // Active stats depending on current view filter
+      let activeStatus: DayData["activeStatus"] = "unrecorded"
+      let activeLabel = ""
+      let activeCalories = 0
+      let activeTargetCalories = 0
+      let activeCalorieDiff = 0
+      let activeMealsCount = 0
+      let activeStepCount = 0
+      let activeProtein = 0
+      let activeWeight: number | null = null
+
+      if (personFilter === "ฝ่ายชาย") {
+        activeStatus = maleStats.status
+        activeLabel = maleStats.statusLabel
+        activeCalories = maleStats.totalCalories
+        activeTargetCalories = maleStats.targetCalories
+        activeCalorieDiff = maleStats.calorieDiff
+        activeMealsCount = maleStats.meals.length
+        activeStepCount = maleStats.stepCount
+        activeProtein = maleStats.totalProtein
+        activeWeight = maleStats.weight
+      } else if (personFilter === "ฝ่ายหญิง") {
+        activeStatus = femaleStats.status
+        activeLabel = femaleStats.statusLabel
+        activeCalories = femaleStats.totalCalories
+        activeTargetCalories = femaleStats.targetCalories
+        activeCalorieDiff = femaleStats.calorieDiff
+        activeMealsCount = femaleStats.meals.length
+        activeStepCount = femaleStats.stepCount
+        activeProtein = femaleStats.totalProtein
+        activeWeight = femaleStats.weight
+      } else {
+        // "ALL" (รวมชายหญิง)
+        activeStatus =
+          coupleStatus === "both_good"
+            ? "good"
+            : coupleStatus === "both_bad"
+            ? "bad"
+            : coupleStatus === "male_only" || coupleStatus === "female_only"
+            ? "good"
+            : coupleStatus === "future"
+            ? "future"
+            : "unrecorded"
+        activeLabel = coupleStatusLabel
+        activeCalories = maleStats.totalCalories + femaleStats.totalCalories
+        activeTargetCalories = maleStats.targetCalories + femaleStats.targetCalories
+        activeCalorieDiff = activeTargetCalories - activeCalories
+        activeMealsCount = maleStats.meals.length + femaleStats.meals.length
+        activeStepCount = maleStats.stepCount + femaleStats.stepCount
+        activeProtein = Number((maleStats.totalProtein + femaleStats.totalProtein).toFixed(1))
+        activeWeight = (maleWeight || 0) + (femaleWeight || 0) || null
       }
 
       result.push({
@@ -319,20 +424,20 @@ export function CalendarView({
         isToday,
         isFuture,
         dayOfWeek,
-        dayMeals,
-        totalCalories,
-        totalProtein: Number(totalProtein.toFixed(1)),
-        totalCarbs: Number(totalCarbs.toFixed(1)),
-        totalFat: Number(totalFat.toFixed(1)),
-        stepCount,
-        weight,
-        targetCalories,
-        targetSteps,
-        targetProtein,
-        calorieDiff,
-        status,
-        statusLabel,
-        statusReason,
+        male: maleStats,
+        female: femaleStats,
+        coupleStatus,
+        coupleStatusLabel,
+        coupleStatusBadgeColor,
+        activeStatus,
+        activeLabel,
+        activeCalories,
+        activeTargetCalories,
+        activeCalorieDiff,
+        activeMealsCount,
+        activeStepCount,
+        activeProtein,
+        activeWeight,
       })
     }
 
@@ -343,69 +448,103 @@ export function CalendarView({
     todayStr,
     meals,
     healthLogs,
-    isAll,
-    isFemale,
-    personFilter,
-    targetCalories,
-    targetSteps,
-    targetProtein,
+    maleTargetIntake,
+    femaleTargetIntake,
+    maleStepTarget,
+    femaleStepTarget,
+    maleProteinTarget,
+    femaleProteinTarget,
     criteria,
+    personFilter,
   ])
 
-  // Leading empty slots for proper calendar alignment (Sunday = 0, Monday = 1, etc.)
+  // Leading empty slots for calendar alignment (Sun=0, Mon=1...)
   const firstDayOffset = React.useMemo(() => {
     return new Date(selectedYear, selectedMonth, 1).getDay()
   }, [selectedYear, selectedMonth])
 
-  // Monthly summary stats
+  // Monthly summary calculations (รองรับทั้ง รวมชายหญิง และแยกคน)
   const monthlyStats = React.useMemo(() => {
-    let goodDays = 0
-    let badDays = 0
-    let unrecordedPastDays = 0
-    let futureDays = 0
-    let totalCalsExceeded = 0
-    let longestStreak = 0
-    let currentStreakCounter = 0
+    let bothGoodDays = 0
+    let maleGoodDays = 0
+    let maleBadDays = 0
+    let femaleGoodDays = 0
+    let femaleBadDays = 0
+    let loggedDaysCount = 0
+    let futureDaysCount = 0
+
+    let maleLongestStreak = 0
+    let maleStreakCounter = 0
+    let femaleLongestStreak = 0
+    let femaleStreakCounter = 0
+    let coupleLongestStreak = 0
+    let coupleStreakCounter = 0
 
     monthDays.forEach((d) => {
-      if (d.status === "good") {
-        goodDays++
-        currentStreakCounter++
-        if (currentStreakCounter > longestStreak) {
-          longestStreak = currentStreakCounter
-        }
-      } else if (d.status === "bad") {
-        badDays++
-        currentStreakCounter = 0
-        if (d.calorieDiff < 0) {
-          totalCalsExceeded += Math.abs(d.calorieDiff)
-        }
-      } else if (d.status === "future") {
-        futureDays++
+      if (d.isFuture) {
+        futureDaysCount++
+        return
+      }
+
+      const hasMaleLog = d.male.status !== "unrecorded"
+      const hasFemaleLog = d.female.status !== "unrecorded"
+
+      if (hasMaleLog || hasFemaleLog) {
+        loggedDaysCount++
+      }
+
+      if (d.coupleStatus === "both_good") {
+        bothGoodDays++
+        coupleStreakCounter++
+        if (coupleStreakCounter > coupleLongestStreak) coupleLongestStreak = coupleStreakCounter
       } else {
-        unrecordedPastDays++
-        currentStreakCounter = 0
+        coupleStreakCounter = 0
+      }
+
+      if (d.male.status === "good") {
+        maleGoodDays++
+        maleStreakCounter++
+        if (maleStreakCounter > maleLongestStreak) maleLongestStreak = maleStreakCounter
+      } else if (d.male.status === "bad") {
+        maleBadDays++
+        maleStreakCounter = 0
+      }
+
+      if (d.female.status === "good") {
+        femaleGoodDays++
+        femaleStreakCounter++
+        if (femaleStreakCounter > femaleLongestStreak) femaleLongestStreak = femaleStreakCounter
+      } else if (d.female.status === "bad") {
+        femaleBadDays++
+        femaleStreakCounter = 0
       }
     })
 
-    const loggedDays = goodDays + badDays
-    const adherenceRate = loggedDays > 0 ? Math.round((goodDays / loggedDays) * 100) : 0
-    const avgExcessCal = badDays > 0 ? Math.round(totalCalsExceeded / badDays) : 0
+    const maleTotalLogged = maleGoodDays + maleBadDays
+    const femaleTotalLogged = femaleGoodDays + femaleBadDays
+
+    const maleAdherence = maleTotalLogged > 0 ? Math.round((maleGoodDays / maleTotalLogged) * 100) : 0
+    const femaleAdherence = femaleTotalLogged > 0 ? Math.round((femaleGoodDays / femaleTotalLogged) * 100) : 0
 
     return {
-      goodDays,
-      badDays,
-      unrecordedPastDays,
-      futureDays,
-      loggedDays,
-      adherenceRate,
-      longestStreak,
-      avgExcessCal,
+      bothGoodDays,
+      maleGoodDays,
+      maleBadDays,
+      femaleGoodDays,
+      femaleBadDays,
+      loggedDaysCount,
+      futureDaysCount,
+      maleAdherence,
+      femaleAdherence,
+      maleLongestStreak,
+      femaleLongestStreak,
+      coupleLongestStreak,
     }
   }, [monthDays])
 
   const openDayDetails = (day: DayData) => {
     setSelectedDay(day)
+    setDetailTab(personFilter === "ฝ่ายหญิง" ? "female" : personFilter === "ฝ่ายชาย" ? "male" : "both")
     setDayModalOpen(true)
   }
 
@@ -416,59 +555,64 @@ export function CalendarView({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-2xl">📅</span>
-            <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-              ปฏิทินความสำเร็จรายเดือน{" "}
-              <span className="text-xs font-normal text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                ดี vs ร้าย
+            <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2 flex-wrap">
+              ปฏิทินความสำเร็จรายเดือน
+              <span className="text-xs font-semibold text-emerald-300 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
+                <Heart className="h-3 w-3 text-pink-400 fill-pink-400" />
+                รวมชายหญิง (คู่รัก)
               </span>
             </h1>
           </div>
           <p className="text-xs text-slate-400">
-            ดูภาพรวมรายเดือน ติ๊กถูกวันคุมดี ✅ สรุปวันที่หลุดเป้า ⚠️ เพื่อประเมินความสม่ำเสมอได้อย่างแม่นยำ
+            ดูภาพรวมรายเดือนคู่รัก ติ๊กถูกวันคุมดี ✅ เช็กวันหลุดเป้า ❌ พร้อมสรุปความสำเร็จของทั้งสองคน
           </p>
         </div>
 
         {/* Person Selector Tabs */}
-        <div className="flex items-center gap-1.5 bg-[#0b0f19] p-1 rounded-xl border border-[#26334d]">
+        <div className="flex items-center gap-1 bg-[#0b0f19] p-1.5 rounded-xl border border-[#26334d]">
           <button
-            onClick={() => handlePersonSwitch("ฝ่ายชาย")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              personFilter === "ฝ่ายชาย"
-                ? "bg-emerald-600 text-white shadow-md shadow-emerald-950"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <span>🏋️‍♂️</span> ฝ่ายชาย
-          </button>
-          <button
-            onClick={() => handlePersonSwitch("ฝ่ายหญิง")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              personFilter === "ฝ่ายหญิง"
-                ? "bg-pink-600 text-white shadow-md shadow-pink-950"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <span>🧘‍♀️</span> ฝ่ายหญิง
-          </button>
-          <button
-            onClick={() => handlePersonSwitch("ALL")}
+            onClick={() => setPersonFilter("ALL")}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
               personFilter === "ALL"
-                ? "bg-indigo-600 text-white shadow-md shadow-indigo-950"
+                ? "bg-gradient-to-r from-indigo-600 to-emerald-600 text-white shadow-md shadow-indigo-950 font-bold"
                 : "text-slate-400 hover:text-white"
             }`}
           >
-            <span>👥</span> รวมคู่รัก
+            <Users className="h-3.5 w-3.5 text-indigo-300" />
+            <span>รวมชายหญิง (แนะนำ)</span>
+          </button>
+          <button
+            onClick={() => setPersonFilter("ฝ่ายชาย")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              personFilter === "ฝ่ายชาย"
+                ? "bg-emerald-600 text-white shadow-md shadow-emerald-950 font-bold"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <span>🏋️‍♂️</span> ชาย
+          </button>
+          <button
+            onClick={() => setPersonFilter("ฝ่ายหญิง")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              personFilter === "ฝ่ายหญิง"
+                ? "bg-pink-600 text-white shadow-md shadow-pink-950 font-bold"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <span>🧘‍♀️</span> หญิง
           </button>
         </div>
       </div>
 
-      {/* 4 Scorecard Summary Cards (ตอบโจทย์: ดีกี่วัน ร้ายกี่วัน) */}
+      {/* 4 Scorecard Summary Cards (รวมชายหญิง: สรุปดีกี่วันร้ายกี่วันแบบคู่รัก) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Card 1: วันคุมดี */}
-        <Card className="bg-gradient-to-br from-[#0c1c1a] to-[#122325] border border-emerald-500/40 shadow-md">
+        {/* Card 1: วันคุมดีทั้งคู่ */}
+        <Card className="bg-gradient-to-br from-[#0c1f1c] via-[#102924] to-[#142e2b] border border-emerald-500/50 shadow-md">
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <span className="text-xs text-emerald-300 font-medium">วันคุมได้ดี (Good Days)</span>
+            <span className="text-xs text-emerald-300 font-semibold flex items-center gap-1">
+              <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+              วันคุมดีทั้งคู่ (Couple Win)
+            </span>
             <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg">
               <CheckCircle2 className="h-4 w-4" />
             </div>
@@ -476,80 +620,113 @@ export function CalendarView({
           <CardContent>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-extrabold text-emerald-400 font-mono">
-                {monthlyStats.goodDays}
+                {monthlyStats.bothGoodDays}
               </span>
               <span className="text-xs text-slate-400 font-sans">วัน</span>
             </div>
-            <p className="text-[11px] text-emerald-300/80 mt-1 flex items-center gap-1">
-              <span>✅</span> ติ๊กถูกสำเร็จ {monthlyStats.adherenceRate}% ของวันที่จด
+            <p className="text-[11px] text-emerald-300/80 mt-1">
+              🌟 ทั้งชายและหญิงคุมสำเร็จพร้อมกัน
             </p>
           </CardContent>
         </Card>
 
-        {/* Card 2: วันหลุดเป้า */}
-        <Card className="bg-gradient-to-br from-[#201016] to-[#251520] border border-rose-500/40 shadow-md">
+        {/* Card 2: สรุปฝ่ายชาย */}
+        <Card className="bg-gradient-to-br from-[#0d1729] to-[#121f37] border border-emerald-500/30 shadow-md">
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <span className="text-xs text-rose-300 font-medium">วันหลุดเป้า (Bad Days)</span>
-            <div className="p-1.5 bg-rose-500/20 text-rose-400 rounded-lg">
-              <XCircle className="h-4 w-4" />
-            </div>
+            <span className="text-xs text-emerald-300 font-semibold flex items-center gap-1">
+              <span>🏋️‍♂️</span> ฝ่ายชาย (ดี vs ร้าย)
+            </span>
+            <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-500/10 px-2 py-0.5 rounded">
+              {monthlyStats.maleAdherence}% คุมดี
+            </span>
           </CardHeader>
           <CardContent>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-rose-400 font-mono">
-                {monthlyStats.badDays}
-              </span>
-              <span className="text-xs text-slate-400 font-sans">วัน</span>
-            </div>
-            <p className="text-[11px] text-rose-300/80 mt-1">
-              {monthlyStats.badDays > 0
-                ? `เกินเฉลี่ย +${monthlyStats.avgExcessCal.toLocaleString()} kcal/วันหลุด`
-                : "ไม่มีวันหลุดเลย ยอดเยี่ยม! ✨"}
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Card 3: อัตราความสำเร็จ & วันที่เหลือ */}
-        <Card className="bg-gradient-to-br from-[#12172a] to-[#161d33] border border-indigo-500/30 shadow-md">
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <span className="text-xs text-indigo-300 font-medium">ความสม่ำเสมอ (Adherence)</span>
-            <div className="p-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg">
-              <Percent className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-indigo-300 font-mono">
-                {monthlyStats.adherenceRate}%
-              </span>
+            <div className="flex items-baseline gap-3">
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-extrabold text-emerald-400 font-mono">
+                  {monthlyStats.maleGoodDays}
+                </span>
+                <span className="text-[10px] text-emerald-300">ดี</span>
+              </div>
+              <span className="text-slate-600">/</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-extrabold text-rose-400 font-mono">
+                  {monthlyStats.maleBadDays}
+                </span>
+                <span className="text-[10px] text-rose-300">หลุด</span>
+              </div>
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
-              จดบันทึกแล้ว {monthlyStats.loggedDays} วัน (รอ {monthlyStats.futureDays} วัน)
+              เป้า {maleTargetIntake.toLocaleString()} kcal • สถิติต่อเนื่อง {monthlyStats.maleLongestStreak} วัน
             </p>
           </CardContent>
         </Card>
 
-        {/* Card 4: สถิติคุมดีต่อเนื่อง */}
-        <Card className="bg-gradient-to-br from-[#1c1811] to-[#251f15] border border-amber-500/40 shadow-md">
+        {/* Card 3: สรุปฝ่ายหญิง */}
+        <Card className="bg-gradient-to-br from-[#22101e] to-[#2b1426] border border-pink-500/30 shadow-md">
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <span className="text-xs text-amber-300 font-medium">คุมดีต่อเนื่องสูงสุด (Streak)</span>
+            <span className="text-xs text-pink-300 font-semibold flex items-center gap-1">
+              <span>🧘‍♀️</span> ฝ่ายหญิง (ดี vs ร้าย)
+            </span>
+            <span className="text-[10px] text-pink-400 font-mono font-bold bg-pink-500/10 px-2 py-0.5 rounded">
+              {monthlyStats.femaleAdherence}% คุมดี
+            </span>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-baseline gap-3">
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-extrabold text-emerald-400 font-mono">
+                  {monthlyStats.femaleGoodDays}
+                </span>
+                <span className="text-[10px] text-emerald-300">ดี</span>
+              </div>
+              <span className="text-slate-600">/</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-extrabold text-rose-400 font-mono">
+                  {monthlyStats.femaleBadDays}
+                </span>
+                <span className="text-[10px] text-rose-300">หลุด</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1">
+              เป้า {femaleTargetIntake.toLocaleString()} kcal • สถิติต่อเนื่อง {monthlyStats.femaleLongestStreak} วัน
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Card 4: การแข่งขันคู่รัก (ใครวินัยนำ) */}
+        <Card className="bg-gradient-to-br from-[#1b1710] to-[#251f15] border border-amber-500/40 shadow-md">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <span className="text-xs text-amber-300 font-semibold flex items-center gap-1">
+              <Trophy className="h-3.5 w-3.5 text-amber-400" />
+              การแข่งขันคู่รัก (Leader)
+            </span>
             <div className="p-1.5 bg-amber-500/20 text-amber-400 rounded-lg">
               <Flame className="h-4 w-4" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-amber-400 font-mono">
-                {monthlyStats.longestStreak}
-              </span>
-              <span className="text-xs text-slate-400 font-sans">วันติด 🔥</span>
+            <div className="text-base font-bold text-white flex items-center gap-2">
+              {monthlyStats.maleGoodDays > monthlyStats.femaleGoodDays ? (
+                <span className="text-emerald-400 flex items-center gap-1">
+                  <span>🏋️‍♂️ ฝ่ายชายนำ</span>
+                  <span className="text-xs font-normal text-slate-400">
+                    (+{monthlyStats.maleGoodDays - monthlyStats.femaleGoodDays} วัน)
+                  </span>
+                </span>
+              ) : monthlyStats.femaleGoodDays > monthlyStats.maleGoodDays ? (
+                <span className="text-pink-400 flex items-center gap-1">
+                  <span>🧘‍♀️ ฝ่ายหญิงนำ</span>
+                  <span className="text-xs font-normal text-slate-400">
+                    (+{monthlyStats.femaleGoodDays - monthlyStats.maleGoodDays} วัน)
+                  </span>
+                </span>
+              ) : (
+                <span className="text-amber-300">🤝 เสมอกันสุดสูสี!</span>
+              )}
             </div>
             <p className="text-[11px] text-amber-300/80 mt-1">
-              {monthlyStats.longestStreak >= 7
-                ? "วินัยระดับยอดเยี่ยม 🏆"
-                : monthlyStats.longestStreak > 0
-                ? "ทำได้ดี พยายามรักษาความต่อเนื่อง!"
-                : "เริ่มต้นบันทึกเพื่อสร้างสถิติ!"}
+              สถิติคุมดีทั้งคู่ต่อเนื่อง {monthlyStats.coupleLongestStreak} วันติด 🔥
             </p>
           </CardContent>
         </Card>
@@ -603,7 +780,7 @@ export function CalendarView({
         {/* Criteria Selection: แคลอรี่ / ก้าวเดิน / โปรตีน / รวม */}
         <div className="flex items-center gap-1 bg-[#0b0f19] p-1 rounded-lg border border-[#26334d] text-xs">
           <span className="text-[11px] text-slate-400 px-2 font-medium hidden sm:inline">
-            เกณฑ์ประเมินดี/ร้าย:
+            เกณฑ์ดี/ร้าย:
           </span>
           <button
             type="button"
@@ -615,7 +792,7 @@ export function CalendarView({
             }`}
           >
             <Utensils className="h-3 w-3" />
-            <span>คุมแคลอรี่ (เป้ากิน)</span>
+            <span>คุมแคลอรี่</span>
           </button>
           <button
             type="button"
@@ -675,22 +852,21 @@ export function CalendarView({
           {Array.from({ length: firstDayOffset }).map((_, idx) => (
             <div
               key={`empty-${idx}`}
-              className="min-h-[100px] sm:min-h-[120px] bg-[#0d1424]/30 p-2 opacity-30 cursor-default"
+              className="min-h-[110px] sm:min-h-[135px] bg-[#0d1424]/30 p-2 opacity-30 cursor-default"
             />
           ))}
 
           {/* Actual days in month */}
           {monthDays.map((day) => {
-            const isGood = day.status === "good"
-            const isBad = day.status === "bad"
-            const isFuture = day.status === "future"
-            const isUnrecorded = day.status === "unrecorded"
+            const isGood = isAll ? day.coupleStatus === "both_good" : day.activeStatus === "good"
+            const isBad = isAll ? day.coupleStatus === "both_bad" : day.activeStatus === "bad"
+            const isFuture = day.isFuture
 
             return (
               <div
                 key={day.dateStr}
                 onClick={() => openDayDetails(day)}
-                className={`min-h-[105px] sm:min-h-[125px] p-2 flex flex-col justify-between transition-all cursor-pointer relative group ${
+                className={`min-h-[110px] sm:min-h-[135px] p-2 flex flex-col justify-between transition-all cursor-pointer relative group ${
                   day.isToday
                     ? "ring-2 ring-emerald-400 z-10 shadow-lg shadow-emerald-950/40"
                     : ""
@@ -727,135 +903,138 @@ export function CalendarView({
                     )}
                   </div>
 
-                  {/* The visual "ติ๊กถูก" Checkmark vs Bad Badge */}
-                  {isGood && (
-                    <Badge className="bg-emerald-500 text-slate-950 font-extrabold text-[10px] px-1.5 py-0 flex items-center gap-0.5 shadow-sm shadow-emerald-900 border-none">
-                      <CheckCircle2 className="h-3 w-3 stroke-[3]" />
-                      <span className="hidden sm:inline">ดี</span>
+                  {/* Main Badge */}
+                  {isAll ? (
+                    <Badge
+                      className={`text-[9px] px-1.5 py-0 border-none shadow-sm font-bold flex items-center gap-0.5 ${day.coupleStatusBadgeColor}`}
+                    >
+                      {day.coupleStatus === "both_good" && <CheckCircle2 className="h-3 w-3 stroke-[3]" />}
+                      {day.coupleStatus === "both_bad" && <XCircle className="h-3 w-3" />}
+                      <span className="truncate max-w-[70px] sm:max-w-none">{day.coupleStatusLabel}</span>
                     </Badge>
-                  )}
-
-                  {isBad && (
-                    <Badge className="bg-rose-500 text-white font-extrabold text-[10px] px-1.5 py-0 flex items-center gap-0.5 shadow-sm shadow-rose-950 border-none">
-                      <XCircle className="h-3 w-3 stroke-[2.5]" />
-                      <span className="hidden sm:inline">หลุด</span>
-                    </Badge>
-                  )}
-
-                  {isUnrecorded && (
-                    <span className="text-[10px] text-slate-600 font-mono">--</span>
+                  ) : (
+                    <>
+                      {day.activeStatus === "good" && (
+                        <Badge className="bg-emerald-500 text-slate-950 font-extrabold text-[10px] px-1.5 py-0 flex items-center gap-0.5 shadow-sm border-none">
+                          <CheckCircle2 className="h-3 w-3 stroke-[3]" />
+                          <span className="hidden sm:inline">ดี</span>
+                        </Badge>
+                      )}
+                      {day.activeStatus === "bad" && (
+                        <Badge className="bg-rose-500 text-white font-extrabold text-[10px] px-1.5 py-0 flex items-center gap-0.5 shadow-sm border-none">
+                          <XCircle className="h-3 w-3 stroke-[2.5]" />
+                          <span className="hidden sm:inline">หลุด</span>
+                        </Badge>
+                      )}
+                      {day.activeStatus === "unrecorded" && (
+                        <span className="text-[10px] text-slate-600 font-mono">--</span>
+                      )}
+                    </>
                   )}
                 </div>
 
-                {/* Mid: Core Metric Display (based on criteria) */}
-                <div className="my-1 space-y-0.5">
-                  {criteria === "calories" && (
-                    <>
-                      {day.totalCalories > 0 ? (
-                        <div>
-                          <div
-                            className={`text-xs font-mono font-bold leading-tight ${
-                              isGood ? "text-emerald-300" : "text-rose-400"
-                            }`}
-                          >
-                            {day.totalCalories.toLocaleString()}
-                            <span className="text-[10px] text-slate-400 font-normal">
-                              {" "}
-                              / {day.targetCalories.toLocaleString()}
-                            </span>
-                          </div>
-                          <div className="text-[10px] leading-none">
-                            {day.calorieDiff >= 0 ? (
-                              <span className="text-emerald-400">
-                                เหลือ {day.calorieDiff.toLocaleString()} kcal
-                              </span>
-                            ) : (
-                              <span className="text-rose-400 font-semibold">
-                                +{Math.abs(day.calorieDiff).toLocaleString()} kcal
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ) : !isFuture ? (
-                        <span className="text-[10px] text-slate-500">ไม่ได้จดอาหาร</span>
-                      ) : null}
-                    </>
-                  )}
+                {/* Mid Section: รวมชายหญิง (แสดง 2 แถว ชาย vs หญิง แยกชัดเจน) */}
+                {isAll ? (
+                  <div className="space-y-1 my-1">
+                    {/* Male Row */}
+                    <div
+                      className={`flex items-center justify-between text-[10px] font-mono px-1.5 py-0.5 rounded transition-all ${
+                        day.male.status === "good"
+                          ? "bg-emerald-950/40 text-emerald-300 border border-emerald-500/30"
+                          : day.male.status === "bad"
+                          ? "bg-rose-950/40 text-rose-300 border border-rose-500/30"
+                          : "text-slate-500 bg-[#0b0f19]/30"
+                      }`}
+                    >
+                      <span className="flex items-center gap-1 font-semibold">
+                        <span>🏋️‍♂️</span>
+                        {day.male.totalCalories > 0 ? (
+                          <span>{day.male.totalCalories.toLocaleString()}</span>
+                        ) : (
+                          <span className="text-slate-600">--</span>
+                        )}
+                      </span>
+                      <span>
+                        {day.male.status === "good" ? "✅" : day.male.status === "bad" ? "❌" : ""}
+                      </span>
+                    </div>
 
-                  {criteria === "steps" && (
-                    <>
-                      {day.stepCount > 0 ? (
-                        <div>
-                          <div
-                            className={`text-xs font-mono font-bold ${
-                              isGood ? "text-indigo-300" : "text-amber-400"
-                            }`}
-                          >
-                            {day.stepCount.toLocaleString()}{" "}
-                            <span className="text-[10px] text-slate-400 font-normal">ก้าว</span>
-                          </div>
-                          <span className="text-[10px] text-slate-400">
-                            เป้า {day.targetSteps.toLocaleString()}
+                    {/* Female Row */}
+                    <div
+                      className={`flex items-center justify-between text-[10px] font-mono px-1.5 py-0.5 rounded transition-all ${
+                        day.female.status === "good"
+                          ? "bg-pink-950/40 text-pink-300 border border-pink-500/30"
+                          : day.female.status === "bad"
+                          ? "bg-rose-950/40 text-rose-300 border border-rose-500/30"
+                          : "text-slate-500 bg-[#0b0f19]/30"
+                      }`}
+                    >
+                      <span className="flex items-center gap-1 font-semibold">
+                        <span>🧘‍♀️</span>
+                        {day.female.totalCalories > 0 ? (
+                          <span>{day.female.totalCalories.toLocaleString()}</span>
+                        ) : (
+                          <span className="text-slate-600">--</span>
+                        )}
+                      </span>
+                      <span>
+                        {day.female.status === "good" ? "✅" : day.female.status === "bad" ? "❌" : ""}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  /* Single Person Mid Section */
+                  <div className="my-1 space-y-0.5">
+                    {day.activeCalories > 0 ? (
+                      <div>
+                        <div
+                          className={`text-xs font-mono font-bold leading-tight ${
+                            day.activeStatus === "good" ? "text-emerald-300" : "text-rose-400"
+                          }`}
+                        >
+                          {day.activeCalories.toLocaleString()}
+                          <span className="text-[10px] text-slate-400 font-normal">
+                            {" "}
+                            / {day.activeTargetCalories.toLocaleString()}
                           </span>
                         </div>
-                      ) : !isFuture ? (
-                        <span className="text-[10px] text-slate-500">ไม่ได้จดก้าว</span>
-                      ) : null}
-                    </>
-                  )}
-
-                  {criteria === "protein" && (
-                    <>
-                      {day.totalProtein > 0 ? (
-                        <div>
-                          <div
-                            className={`text-xs font-mono font-bold ${
-                              isGood ? "text-amber-300" : "text-rose-400"
-                            }`}
-                          >
-                            {day.totalProtein} g{" "}
-                            <span className="text-[10px] text-slate-400 font-normal">
-                              / {day.targetProtein}g
+                        <div className="text-[10px] leading-none">
+                          {day.activeCalorieDiff >= 0 ? (
+                            <span className="text-emerald-400">
+                              เหลือ {day.activeCalorieDiff.toLocaleString()} kcal
                             </span>
-                          </div>
+                          ) : (
+                            <span className="text-rose-400 font-semibold">
+                              +{Math.abs(day.activeCalorieDiff).toLocaleString()} kcal
+                            </span>
+                          )}
                         </div>
-                      ) : !isFuture ? (
-                        <span className="text-[10px] text-slate-500">ไม่ได้จดอาหาร</span>
-                      ) : null}
-                    </>
-                  )}
+                      </div>
+                    ) : !isFuture ? (
+                      <span className="text-[10px] text-slate-500">ไม่ได้จดอาหาร</span>
+                    ) : null}
+                  </div>
+                )}
 
-                  {criteria === "all" && (
-                    <div className="text-[10px] font-mono leading-tight space-y-0.5">
-                      {day.totalCalories > 0 && (
-                        <div className={day.calorieDiff >= 0 ? "text-emerald-300" : "text-rose-400"}>
-                          🔥 {day.totalCalories} kcal
-                        </div>
-                      )}
-                      {day.stepCount > 0 && (
-                        <div className="text-indigo-300">👟 {day.stepCount.toLocaleString()}</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Bottom Row: Quick indicator icons for meals / steps / weight */}
-                <div className="flex items-center gap-1.5 text-[10px] text-slate-400 pt-1 border-t border-[#26334d]/40">
-                  {day.dayMeals.length > 0 && (
-                    <span className="text-emerald-400 font-mono" title={`${day.dayMeals.length} มื้อ`}>
-                      🍽️{day.dayMeals.length}
+                {/* Bottom Row: Activities & Quick indicators */}
+                <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-[#26334d]/40">
+                  <div className="flex items-center gap-1">
+                    {day.male.meals.length + day.female.meals.length > 0 && (
+                      <span className="text-emerald-400 font-mono" title="มื้ออาหาร">
+                        🍽️{day.male.meals.length + day.female.meals.length}
+                      </span>
+                    )}
+                    {day.male.stepCount + day.female.stepCount > 0 && (
+                      <span className="text-indigo-400 font-mono" title="ก้าวเดิน">
+                        👟
+                      </span>
+                    )}
+                  </div>
+                  {day.male.weight || day.female.weight ? (
+                    <span className="text-cyan-400 font-mono text-[9px]">
+                      ⚖️{isAll ? `${day.male.weight || "-"}/${day.female.weight || "-"}` : day.activeWeight}
                     </span>
-                  )}
-                  {day.stepCount > 0 && (
-                    <span className="text-indigo-400 font-mono" title={`${day.stepCount} ก้าว`}>
-                      👟
-                    </span>
-                  )}
-                  {day.weight && (
-                    <span className="text-cyan-400 font-mono" title={`นน. ${day.weight} กก.`}>
-                      ⚖️{day.weight}
-                    </span>
-                  )}
+                  ) : null}
                 </div>
               </div>
             )
@@ -866,36 +1045,41 @@ export function CalendarView({
       {/* Legend / Guidance Note */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-[#111726] border border-[#26334d] text-xs text-slate-400">
         <div className="flex items-center gap-4 flex-wrap">
-          <span className="font-semibold text-slate-300">คำอธิบายสัญลักษณ์:</span>
+          <span className="font-semibold text-slate-300">สัญลักษณ์ปฏิทิน:</span>
           <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full bg-emerald-500 inline-block" />
-            <span className="text-emerald-300 font-medium">วันคุมได้ดี (✅ ติ๊กถูก)</span>
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 inline-block" />
+            <span className="text-emerald-300 font-medium">🌟 ดีทั้งคู่ (คุมดีพร้อมกัน)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full bg-rose-500 inline-block" />
-            <span className="text-rose-300 font-medium">วันหลุดเป้า (❌ กินเกิน)</span>
+            <span className="h-2.5 w-2.5 rounded-full bg-amber-500 inline-block" />
+            <span className="text-amber-300">🏋️‍♂️ ชายดี (หญิงเกิน)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full bg-slate-600 inline-block" />
-            <span>ยังไม่บันทึก</span>
+            <span className="h-2.5 w-2.5 rounded-full bg-pink-500 inline-block" />
+            <span className="text-pink-300">🧘‍♀️ หญิงดี (ชายเกิน)</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-rose-500 inline-block" />
+            <span className="text-rose-300">❌ หลุดคู่</span>
           </div>
         </div>
 
         <span className="text-[11px] text-slate-500">
-          💡 คลิกที่ช่องวันที่เพื่อเปิดดูรายการอาหารและสรุปผลประจำวันแบบละเอียด
+          💡 คลิกที่ช่องวัน เพื่อดูรายละเอียดมื้ออาหารและน้ำหนักของทั้งชายและหญิง
         </span>
       </div>
 
-      {/* Day Detail Dialog */}
+      {/* Day Detail Dialog (รองรับแยกดูทั้ง ชาย vs หญิง) */}
       {selectedDay && (
         <Dialog open={dayModalOpen} onOpenChange={setDayModalOpen}>
-          <DialogContent className="max-w-lg bg-[#111726] border-[#26334d] text-white p-6 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl bg-[#111726] border-[#26334d] text-white p-6 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400">
-                  {personFilter === "ALL" ? "ภาพรวมคู่รัก" : personFilter}
+                <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
+                  <Users className="h-3.5 w-3.5" />
+                  สรุปผลรายวันคู่รัก
                 </span>
-                <span className="text-xs text-emerald-400 font-mono">
+                <span className="text-xs text-slate-400 font-mono">
                   {selectedDay.dateStr}
                 </span>
               </div>
@@ -904,187 +1088,208 @@ export function CalendarView({
               </DialogTitle>
             </DialogHeader>
 
-            {/* Status Banner */}
+            {/* Couple Status Banner */}
             <div
               className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${
-                selectedDay.status === "good"
+                selectedDay.coupleStatus === "both_good"
                   ? "bg-emerald-950/40 border-emerald-500/50 text-emerald-300"
-                  : selectedDay.status === "bad"
+                  : selectedDay.coupleStatus === "both_bad"
                   ? "bg-rose-950/40 border-rose-500/50 text-rose-300"
+                  : selectedDay.coupleStatus === "male_only" || selectedDay.coupleStatus === "female_only"
+                  ? "bg-amber-950/40 border-amber-500/40 text-amber-300"
                   : "bg-slate-900 border-[#26334d] text-slate-300"
               }`}
             >
               <div className="flex items-center gap-2.5">
-                {selectedDay.status === "good" ? (
+                {selectedDay.coupleStatus === "both_good" ? (
                   <CheckCircle2 className="h-6 w-6 text-emerald-400 shrink-0" />
-                ) : selectedDay.status === "bad" ? (
+                ) : selectedDay.coupleStatus === "both_bad" ? (
                   <XCircle className="h-6 w-6 text-rose-400 shrink-0" />
                 ) : (
-                  <Info className="h-6 w-6 text-slate-400 shrink-0" />
+                  <Sparkles className="h-6 w-6 text-amber-400 shrink-0" />
                 )}
                 <div>
                   <strong className="text-sm block">
-                    {selectedDay.status === "good"
-                      ? "วันคุมได้ดี (Good Day) ✅"
-                      : selectedDay.status === "bad"
-                      ? "วันหลุดเป้าหมาย (Bad Day) ⚠️"
+                    {selectedDay.coupleStatus === "both_good"
+                      ? "วันคุมดีทั้งคู่ (Both Won) 🌟"
+                      : selectedDay.coupleStatus === "both_bad"
+                      ? "วันหลุดเป้าทั้งคู่ (Both Missed) ⚠️"
+                      : selectedDay.coupleStatus === "male_only"
+                      ? "ฝ่ายชายคุมดี (ฝ่ายหญิงหลุดเป้า) 🏋️‍♂️"
+                      : selectedDay.coupleStatus === "female_only"
+                      ? "ฝ่ายหญิงคุมดี (ฝ่ายชายหลุดเป้า) 🧘‍♀️"
                       : selectedDay.isFuture
                       ? "วันข้างหน้า (ยังไม่ถึงวัน)"
                       : "ยังไม่มีการบันทึกข้อมูล"}
                   </strong>
-                  <span className="text-xs opacity-90">{selectedDay.statusReason}</span>
+                  <span className="text-xs opacity-90">
+                    ชาย: {selectedDay.male.totalCalories}/{maleTargetIntake} kcal ({selectedDay.male.statusLabel}) • หญิง: {selectedDay.female.totalCalories}/{femaleTargetIntake} kcal ({selectedDay.female.statusLabel})
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* Nutrition & Activity Breakdown */}
-            <div className="space-y-3 pt-2">
-              <span className="text-xs font-semibold text-slate-300 block">
-                สรุปโภชนาการและกิจกรรมของวัน
-              </span>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono">
-                {/* Calories */}
-                <div className="p-2.5 rounded-xl bg-[#0b0f19] border border-[#26334d]">
-                  <span className="text-[10px] text-slate-400 block font-sans">แคลอรี่ที่กิน</span>
-                  <span
-                    className={`text-base font-bold ${
-                      selectedDay.calorieDiff >= 0 ? "text-emerald-400" : "text-rose-400"
-                    }`}
-                  >
-                    {selectedDay.totalCalories.toLocaleString()}
-                  </span>
-                  <span className="text-[10px] text-slate-500 block font-sans">
-                    โควต้า {selectedDay.targetCalories.toLocaleString()}
-                  </span>
-                </div>
-
-                {/* Protein */}
-                <div className="p-2.5 rounded-xl bg-[#0b0f19] border border-[#26334d]">
-                  <span className="text-[10px] text-slate-400 block font-sans">โปรตีน</span>
-                  <span className="text-base font-bold text-emerald-300">
-                    {selectedDay.totalProtein}g
-                  </span>
-                  <span className="text-[10px] text-slate-500 block font-sans">
-                    เป้า {selectedDay.targetProtein}g
-                  </span>
-                </div>
-
-                {/* Steps */}
-                <div className="p-2.5 rounded-xl bg-[#0b0f19] border border-[#26334d]">
-                  <span className="text-[10px] text-slate-400 block font-sans">ก้าวเดิน</span>
-                  <span className="text-base font-bold text-indigo-300">
-                    {selectedDay.stepCount.toLocaleString()}
-                  </span>
-                  <span className="text-[10px] text-slate-500 block font-sans">
-                    เป้า {selectedDay.targetSteps.toLocaleString()}
-                  </span>
-                </div>
-
-                {/* Weight */}
-                <div className="p-2.5 rounded-xl bg-[#0b0f19] border border-[#26334d]">
-                  <span className="text-[10px] text-slate-400 block font-sans">น้ำหนักเช้า</span>
-                  <span className="text-base font-bold text-cyan-300">
-                    {selectedDay.weight ? `${selectedDay.weight} กก.` : "--"}
-                  </span>
-                  <span className="text-[10px] text-slate-500 block font-sans">ชั่งเช้า</span>
-                </div>
-              </div>
-
-              {/* Progress Bar for Calories */}
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs text-slate-400">
-                  <span>ความจุโควต้าแคลอรี่</span>
-                  <span
-                    className={
-                      selectedDay.calorieDiff >= 0
-                        ? "text-emerald-400 font-semibold"
-                        : "text-rose-400 font-semibold"
-                    }
-                  >
-                    {selectedDay.calorieDiff >= 0
-                      ? `กินได้อีก ${selectedDay.calorieDiff.toLocaleString()} kcal`
-                      : `กินเกิน ${Math.abs(selectedDay.calorieDiff).toLocaleString()} kcal`}
-                  </span>
-                </div>
-                <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-                  <div
-                    className={`h-2 rounded-full transition-all ${
-                      selectedDay.totalCalories > selectedDay.targetCalories
-                        ? "bg-rose-500"
-                        : "bg-emerald-500"
-                    }`}
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        selectedDay.targetCalories > 0
-                          ? (selectedDay.totalCalories / selectedDay.targetCalories) * 100
-                          : 0
-                      )}%`,
-                    }}
-                  />
-                </div>
-              </div>
+            {/* Toggle Tabs for Day Detail: Both vs Male vs Female */}
+            <div className="flex rounded-xl bg-[#0b0f19] p-1 border border-[#26334d]">
+              <button
+                type="button"
+                onClick={() => setDetailTab("both")}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  detailTab === "both"
+                    ? "bg-indigo-600 text-white shadow-sm font-bold"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                👥 สรุปคู่รัก (ทั้งสองคน)
+              </button>
+              <button
+                type="button"
+                onClick={() => setDetailTab("male")}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  detailTab === "male"
+                    ? "bg-emerald-600 text-white shadow-sm font-bold"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                🏋️‍♂️ ฝ่ายชาย ({selectedDay.male.meals.length} มื้อ)
+              </button>
+              <button
+                type="button"
+                onClick={() => setDetailTab("female")}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  detailTab === "female"
+                    ? "bg-pink-600 text-white shadow-sm font-bold"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                🧘‍♀️ ฝ่ายหญิง ({selectedDay.female.meals.length} มื้อ)
+              </button>
             </div>
 
-            {/* List of meals eaten on this day */}
-            <div className="space-y-2 pt-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                  <Utensils className="h-3.5 w-3.5 text-emerald-400" />
-                  รายการอาหารที่บันทึกในวันนี้ ({selectedDay.dayMeals.length} รายการ)
-                </span>
-                {onOpenAddMeal && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setDayModalOpen(false)
-                      onOpenAddMeal(selectedDay.dateStr)
-                    }}
-                    className="h-7 text-xs border-emerald-500/40 text-emerald-300 hover:bg-emerald-600 hover:text-white"
-                  >
-                    <Plus className="h-3 w-3 mr-1" />
-                    + เพิ่มมื้ออาหารวันนี้
-                  </Button>
+            {/* Section: Both View (Split Cards) */}
+            {(detailTab === "both" || detailTab === "male") && (
+              <div className="space-y-2 p-3 rounded-xl bg-[#0d1527] border border-emerald-500/30">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-400 text-sm">
+                    <span>🏋️‍♂️</span>
+                    <span>ฝ่ายชาย: {selectedDay.male.statusLabel}</span>
+                  </div>
+                  {onOpenAddMeal && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setDayModalOpen(false)
+                        onOpenAddMeal(selectedDay.dateStr, "ฝ่ายชาย")
+                      }}
+                      className="h-6 text-[11px] border-emerald-500/40 text-emerald-300 hover:bg-emerald-600 hover:text-white px-2"
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      เพิ่มอาหารชาย
+                    </Button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-4 gap-2 text-center font-mono text-xs">
+                  <div className="p-2 rounded-lg bg-[#0b0f19] border border-[#26334d]">
+                    <span className="text-[10px] text-slate-400 block font-sans">แคลอรี่</span>
+                    <strong className={selectedDay.male.calorieDiff >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                      {selectedDay.male.totalCalories}
+                    </strong>
+                    <span className="text-[9px] text-slate-500 block">/ {maleTargetIntake}</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-[#0b0f19] border border-[#26334d]">
+                    <span className="text-[10px] text-slate-400 block font-sans">โปรตีน</span>
+                    <strong className="text-emerald-300">{selectedDay.male.totalProtein}g</strong>
+                    <span className="text-[9px] text-slate-500 block">/ {maleProteinTarget}g</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-[#0b0f19] border border-[#26334d]">
+                    <span className="text-[10px] text-slate-400 block font-sans">ก้าวเดิน</span>
+                    <strong className="text-indigo-300">{selectedDay.male.stepCount.toLocaleString()}</strong>
+                    <span className="text-[9px] text-slate-500 block">/ {maleStepTarget.toLocaleString()}</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-[#0b0f19] border border-[#26334d]">
+                    <span className="text-[10px] text-slate-400 block font-sans">น้ำหนักเช้า</span>
+                    <strong className="text-cyan-300">{selectedDay.male.weight ? `${selectedDay.male.weight} kg` : "--"}</strong>
+                    <span className="text-[9px] text-slate-500 block">ชั่งเช้า</span>
+                  </div>
+                </div>
+
+                {/* Male Meals List */}
+                {selectedDay.male.meals.length > 0 && (
+                  <div className="space-y-1 pt-1 max-h-36 overflow-y-auto">
+                    {selectedDay.male.meals.map((m: any, idx: number) => (
+                      <div key={idx} className="p-1.5 rounded bg-[#0b0f19] border border-[#26334d] flex justify-between text-xs">
+                        <span>{m.mealType || m.MealType} • {m.foodName || m.FoodName} ({m.servings || 1} เสิร์ฟ)</span>
+                        <span className="font-mono text-emerald-400 font-bold">{m.calories || m.Calories} kcal</span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
+            )}
 
-              {selectedDay.dayMeals.length === 0 ? (
-                <div className="p-4 rounded-xl bg-[#0b0f19] border border-[#26334d] text-center text-xs text-slate-500">
-                  ยังไม่มีบันทึกมื้ออาหารสำหรับวันนี้
-                </div>
-              ) : (
-                <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
-                  {selectedDay.dayMeals.map((meal: any, idx: number) => (
-                    <div
-                      key={meal.id || idx}
-                      className="p-2.5 rounded-lg bg-[#0b0f19] border border-[#26334d] flex items-center justify-between text-xs"
+            {(detailTab === "both" || detailTab === "female") && (
+              <div className="space-y-2 p-3 rounded-xl bg-[#20101b] border border-pink-500/30">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-pink-400 text-sm">
+                    <span>🧘‍♀️</span>
+                    <span>ฝ่ายหญิง: {selectedDay.female.statusLabel}</span>
+                  </div>
+                  {onOpenAddMeal && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setDayModalOpen(false)
+                        onOpenAddMeal(selectedDay.dateStr, "ฝ่ายหญิง")
+                      }}
+                      className="h-6 text-[11px] border-pink-500/40 text-pink-300 hover:bg-pink-600 hover:text-white px-2"
                     >
-                      <div>
-                        <div className="font-semibold text-white flex items-center gap-1.5">
-                          <span>{meal.foodName || meal.FoodName}</span>
-                          <span className="text-[10px] text-slate-400 font-normal">
-                            ({meal.servings || 1} เสิร์ฟ)
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-emerald-400">
-                          {meal.mealType || meal.MealType} • {meal.person || meal.Person}
-                        </span>
-                      </div>
-                      <div className="text-right font-mono">
-                        <span className="font-bold text-white block">
-                          {meal.calories || meal.Calories || 0} kcal
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          P: {meal.protein || meal.Protein || 0}g
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                      <Plus className="h-3 w-3 mr-1" />
+                      เพิ่มอาหารหญิง
+                    </Button>
+                  )}
                 </div>
-              )}
-            </div>
+
+                <div className="grid grid-cols-4 gap-2 text-center font-mono text-xs">
+                  <div className="p-2 rounded-lg bg-[#0b0f19] border border-[#26334d]">
+                    <span className="text-[10px] text-slate-400 block font-sans">แคลอรี่</span>
+                    <strong className={selectedDay.female.calorieDiff >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                      {selectedDay.female.totalCalories}
+                    </strong>
+                    <span className="text-[9px] text-slate-500 block">/ {femaleTargetIntake}</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-[#0b0f19] border border-[#26334d]">
+                    <span className="text-[10px] text-slate-400 block font-sans">โปรตีน</span>
+                    <strong className="text-pink-300">{selectedDay.female.totalProtein}g</strong>
+                    <span className="text-[9px] text-slate-500 block">/ {femaleProteinTarget}g</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-[#0b0f19] border border-[#26334d]">
+                    <span className="text-[10px] text-slate-400 block font-sans">ก้าวเดิน</span>
+                    <strong className="text-indigo-300">{selectedDay.female.stepCount.toLocaleString()}</strong>
+                    <span className="text-[9px] text-slate-500 block">/ {femaleStepTarget.toLocaleString()}</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-[#0b0f19] border border-[#26334d]">
+                    <span className="text-[10px] text-slate-400 block font-sans">น้ำหนักเช้า</span>
+                    <strong className="text-cyan-300">{selectedDay.female.weight ? `${selectedDay.female.weight} kg` : "--"}</strong>
+                    <span className="text-[9px] text-slate-500 block">ชั่งเช้า</span>
+                  </div>
+                </div>
+
+                {/* Female Meals List */}
+                {selectedDay.female.meals.length > 0 && (
+                  <div className="space-y-1 pt-1 max-h-36 overflow-y-auto">
+                    {selectedDay.female.meals.map((m: any, idx: number) => (
+                      <div key={idx} className="p-1.5 rounded bg-[#0b0f19] border border-[#26334d] flex justify-between text-xs">
+                        <span>{m.mealType || m.MealType} • {m.foodName || m.FoodName} ({m.servings || 1} เสิร์ฟ)</span>
+                        <span className="font-mono text-pink-400 font-bold">{m.calories || m.Calories} kcal</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <DialogFooter className="pt-2">
               <Button
