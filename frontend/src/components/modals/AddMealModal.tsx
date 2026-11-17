@@ -20,6 +20,7 @@ interface AddMealModalProps {
   foods: any[]
   defaultPerson?: string
   initialFood?: any
+  initialDate?: string
 }
 
 const MEAL_TYPES = [
@@ -37,9 +38,10 @@ export function AddMealModal({
   foods,
   defaultPerson = "ฝ่ายชาย",
   initialFood = null,
+  initialDate = "",
 }: AddMealModalProps) {
   const todayStr = new Date().toISOString().split("T")[0]
-  const [date, setDate] = React.useState(todayStr)
+  const [date, setDate] = React.useState(initialDate || todayStr)
   const [person, setPerson] = React.useState(defaultPerson)
   const [mealType, setMealType] = React.useState("01. มื้อเช้า")
   const [selectedFoodId, setSelectedFoodId] = React.useState("")
@@ -89,6 +91,11 @@ export function AddMealModal({
   React.useEffect(() => {
     if (open) {
       setPerson(defaultPerson === "ALL" ? "ฝ่ายชาย" : defaultPerson)
+      if (initialDate) {
+        setDate(initialDate)
+      } else {
+        setDate(todayStr)
+      }
       if (initialFood) {
         const foodId = String(initialFood.id || initialFood.code || initialFood.name || "")
         setSelectedFoodId(foodId)
@@ -96,7 +103,7 @@ export function AddMealModal({
         setServings(1)
       }
     }
-  }, [open, defaultPerson, initialFood, applyFoodItem])
+  }, [open, defaultPerson, initialFood, initialDate, applyFoodItem, todayStr])
 
   const foodOptions = React.useMemo(() => {
     return foods.map((f) => ({

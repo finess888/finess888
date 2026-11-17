@@ -8,6 +8,7 @@ import {
 } from "@/api/gasClient"
 import { PasscodeGate } from "@/components/views/PasscodeGate"
 import { DashboardView } from "@/components/views/DashboardView"
+import { CalendarView } from "@/components/views/CalendarView"
 import { MealPlanView } from "@/components/views/MealPlanView"
 import { FoodDatabaseView } from "@/components/views/FoodDatabaseView"
 import { WeightTrackerView } from "@/components/views/WeightTrackerView"
@@ -27,6 +28,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
   LayoutDashboard,
+  CalendarCheck,
   CalendarDays,
   Utensils,
   Scale,
@@ -44,6 +46,7 @@ import {
 
 type ViewKey =
   | "dashboard"
+  | "calendar"
   | "mealplan"
   | "fooddb"
   | "weight"
@@ -67,6 +70,7 @@ export default function App() {
   const [addStepOpen, setAddStepOpen] = React.useState(false)
   const [selectedExerciseForLog, setSelectedExerciseForLog] = React.useState<ExerciseItem | null>(null)
   const [selectedFoodForMeal, setSelectedFoodForMeal] = React.useState<any>(null)
+  const [selectedDateForMeal, setSelectedDateForMeal] = React.useState<string>("")
 
   // Auto-check for new deployed web bundle on tab focus & interval
   React.useEffect(() => {
@@ -220,6 +224,12 @@ export default function App() {
   // Navigation Items
   const navItems: { key: ViewKey; label: string; icon: React.ReactNode; badge?: string }[] = [
     { key: "dashboard", label: "ภาพรวมโภชนาการ", icon: <LayoutDashboard className="h-4 w-4" /> },
+    {
+      key: "calendar",
+      label: "ปฏิทินความสำเร็จ (ดี/ร้าย)",
+      icon: <CalendarCheck className="h-4 w-4 text-emerald-400" />,
+      badge: "ใหม่",
+    },
     {
       key: "mealplan",
       label: "แผนการกิน",
@@ -446,12 +456,31 @@ export default function App() {
               onSelectPerson={setSelectedPerson}
               onOpenAddMeal={() => {
                 setSelectedFoodForMeal(null)
+                setSelectedDateForMeal("")
                 setAddMealOpen(true)
               }}
               onOpenAddWeight={() => setAddWeightOpen(true)}
               onOpenAddStep={() => setAddStepOpen(true)}
               onToggleMealStatus={handleToggleMealStatus}
               onNavigateToMealPlan={() => setCurrentView("mealplan")}
+              onNavigateToCalendar={() => setCurrentView("calendar")}
+            />
+          )}
+
+          {currentView === "calendar" && (
+            <CalendarView
+              meals={meals}
+              foods={foods}
+              healthLogs={healthLogs}
+              selectedPerson={selectedPerson}
+              onSelectPerson={setSelectedPerson}
+              onOpenAddMeal={(date) => {
+                setSelectedFoodForMeal(null)
+                setSelectedDateForMeal(date || "")
+                setAddMealOpen(true)
+              }}
+              onOpenAddStep={() => setAddStepOpen(true)}
+              onOpenAddWeight={() => setAddWeightOpen(true)}
             />
           )}
 
@@ -526,12 +555,16 @@ export default function App() {
         open={addMealOpen}
         onOpenChange={(isOpen) => {
           setAddMealOpen(isOpen)
-          if (!isOpen) setSelectedFoodForMeal(null)
+          if (!isOpen) {
+            setSelectedFoodForMeal(null)
+            setSelectedDateForMeal("")
+          }
         }}
         onSave={handleSaveMeal}
         foods={foods}
         defaultPerson={selectedPerson === "ALL" ? "ฝ่ายชาย" : selectedPerson}
         initialFood={selectedFoodForMeal}
+        initialDate={selectedDateForMeal}
       />
 
       <AddFoodModal

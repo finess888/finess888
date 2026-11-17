@@ -83,6 +83,7 @@ interface DashboardViewProps {
   onOpenAddStep?: () => void
   onToggleMealStatus: (id: string, currentStatus: string) => void
   onNavigateToMealPlan: () => void
+  onNavigateToCalendar?: () => void
 }
 
 export function DashboardView({
@@ -96,6 +97,7 @@ export function DashboardView({
   onOpenAddStep,
   onToggleMealStatus,
   onNavigateToMealPlan,
+  onNavigateToCalendar,
 }: DashboardViewProps) {
   const isAll = selectedPerson === "ALL" || selectedPerson === "ทั้งหมด"
   const isMale = selectedPerson === "ฝ่ายชาย"
@@ -977,14 +979,25 @@ export function DashboardView({
               )}
             </div>
 
-            <div className="flex items-center justify-between sm:justify-end gap-2">
+            <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap">
+              {onNavigateToCalendar && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={onNavigateToCalendar}
+                  className="text-xs text-emerald-400 hover:text-white hover:bg-emerald-500/20 flex items-center gap-1 p-0 h-auto font-medium"
+                >
+                  <span>📅 ปฏิทินดี/ร้าย</span>
+                  <ArrowRight className="h-3 w-3" />
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={() => setProjectModalOpen(true)}
                 className="text-xs text-amber-300 hover:text-white hover:bg-amber-500/20 flex items-center gap-1 p-0 h-auto font-medium"
               >
-                <span>💡 บทเรียนและข้อแนะนำโปรเจกต์ต่อไป</span>
+                <span>💡 บทเรียนและข้อแนะนำ</span>
                 <ArrowRight className="h-3 w-3" />
               </Button>
             </div>
