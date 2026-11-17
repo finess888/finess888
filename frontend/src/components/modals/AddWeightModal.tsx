@@ -27,7 +27,7 @@ export function AddWeightModal({
   const todayStr = new Date().toISOString().split("T")[0]
   const [date, setDate] = React.useState(todayStr)
   const [person, setPerson] = React.useState(defaultPerson)
-  const [weight, setWeight] = React.useState<number | "">(person === "ฝ่ายชาย" ? 100.0 : 65.0)
+  const [weight, setWeight] = React.useState<number | string>(person === "ฝ่ายชาย" ? 100.0 : 65.0)
   const [notes, setNotes] = React.useState("")
   const [saving, setSaving] = React.useState(false)
 
@@ -122,15 +122,18 @@ export function AddWeightModal({
               น้ำหนักตัว (kg) *
             </Label>
             <Input
-              type="number"
-              step="0.1"
-              min="20"
-              max="300"
-              value={weight}
-              onChange={(e) => setWeight(e.target.value === "" ? "" : Number(e.target.value))}
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              value={weight === "" ? "" : weight}
+              onChange={(e) => {
+                const val = e.target.value.replace(/[^0-9.]/g, "")
+                setWeight(val === "" ? "" : val)
+              }}
+              placeholder={person === "ฝ่ายชาย" ? "เช่น 100.0" : "เช่น 65.0"}
               required
               autoFocus
-              className="bg-[#0b0f19] border-[#26334d] text-white h-10 text-base font-bold"
+              className="bg-[#0b0f19] border-[#26334d] text-white h-10 text-base font-bold font-mono"
             />
           </div>
 

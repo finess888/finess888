@@ -78,6 +78,7 @@ interface DayData {
   female: PersonDayStats
   coupleStatus: "both_good" | "male_only" | "female_only" | "both_bad" | "partial_unrecorded" | "unrecorded" | "future"
   coupleStatusLabel: string
+  coupleStatusShortLabel: string
   coupleStatusBadgeColor: string
   // Active filtered view helpers
   activeStatus: "good" | "bad" | "unrecorded" | "future"
@@ -109,7 +110,13 @@ export function CalendarView({
   const [selectedMonth, setSelectedMonth] = React.useState<number>(today.getMonth()) // 0 - 11
 
   // Person filter - Default to "ALL" (รวมชายหญิง)
-  const [personFilter, setPersonFilter] = React.useState<string>("ALL")
+  const [personFilter, setPersonFilter] = React.useState<string>(selectedPerson || "ALL")
+
+  React.useEffect(() => {
+    if (selectedPerson) {
+      setPersonFilter(selectedPerson)
+    }
+  }, [selectedPerson])
 
   // Evaluation criteria
   const [criteria, setCriteria] = React.useState<CriteriaType>("calories")
@@ -329,39 +336,48 @@ export function CalendarView({
       // Couple evaluation (รวมชายหญิง)
       let coupleStatus: DayData["coupleStatus"] = "unrecorded"
       let coupleStatusLabel = "ยังไม่บันทึก"
+      let coupleStatusShortLabel = "--"
       let coupleStatusBadgeColor = "bg-slate-700 text-slate-300"
 
       if (isFuture) {
         coupleStatus = "future"
         coupleStatusLabel = "รอสรุป"
+        coupleStatusShortLabel = "รอ"
         coupleStatusBadgeColor = "bg-slate-800/60 text-slate-500"
       } else if (maleStats.status === "good" && femaleStats.status === "good") {
         coupleStatus = "both_good"
         coupleStatusLabel = "🌟 ดีทั้งคู่ ✅"
+        coupleStatusShortLabel = "🌟 ดีคู่"
         coupleStatusBadgeColor = "bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-extrabold"
       } else if (maleStats.status === "good" && femaleStats.status === "bad") {
         coupleStatus = "male_only"
         coupleStatusLabel = "🏋️‍♂️ ชายดี (หญิงเกิน)"
+        coupleStatusShortLabel = "🏋️ ดี"
         coupleStatusBadgeColor = "bg-amber-600 text-white"
       } else if (femaleStats.status === "good" && maleStats.status === "bad") {
         coupleStatus = "female_only"
         coupleStatusLabel = "🧘‍♀️ หญิงดี (ชายเกิน)"
+        coupleStatusShortLabel = "🧘‍♀️ ดี"
         coupleStatusBadgeColor = "bg-pink-600 text-white"
       } else if (maleStats.status === "bad" && femaleStats.status === "bad") {
         coupleStatus = "both_bad"
         coupleStatusLabel = "❌ หลุดคู่"
+        coupleStatusShortLabel = "❌ หลุด"
         coupleStatusBadgeColor = "bg-rose-600 text-white"
       } else if (maleStats.status === "good" || femaleStats.status === "good") {
         coupleStatus = maleStats.status === "good" ? "male_only" : "female_only"
         coupleStatusLabel = maleStats.status === "good" ? "🏋️‍♂️ ชายดี" : "🧘‍♀️ หญิงดี"
+        coupleStatusShortLabel = maleStats.status === "good" ? "🏋️ ดี" : "🧘‍♀️ ดี"
         coupleStatusBadgeColor = maleStats.status === "good" ? "bg-emerald-600 text-white" : "bg-pink-600 text-white"
       } else if (maleStats.status === "bad" || femaleStats.status === "bad") {
         coupleStatus = "both_bad"
         coupleStatusLabel = maleStats.status === "bad" ? "⚠️ ชายเกิน" : "⚠️ หญิงเกิน"
+        coupleStatusShortLabel = maleStats.status === "bad" ? "⚠️ ชายเกิน" : "⚠️ หญิงเกิน"
         coupleStatusBadgeColor = "bg-rose-600 text-white"
       } else {
         coupleStatus = "unrecorded"
         coupleStatusLabel = "--"
+        coupleStatusShortLabel = "--"
         coupleStatusBadgeColor = "bg-slate-800 text-slate-500"
       }
 
@@ -428,6 +444,7 @@ export function CalendarView({
         female: femaleStats,
         coupleStatus,
         coupleStatusLabel,
+        coupleStatusShortLabel,
         coupleStatusBadgeColor,
         activeStatus,
         activeLabel,
@@ -571,7 +588,10 @@ export function CalendarView({
         {/* Person Selector Tabs */}
         <div className="flex items-center gap-1 bg-[#0b0f19] p-1.5 rounded-xl border border-[#26334d]">
           <button
-            onClick={() => setPersonFilter("ALL")}
+            onClick={() => {
+              setPersonFilter("ALL")
+              if (onSelectPerson) onSelectPerson("ALL")
+            }}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
               personFilter === "ALL"
                 ? "bg-gradient-to-r from-indigo-600 to-emerald-600 text-white shadow-md shadow-indigo-950 font-bold"
@@ -582,7 +602,10 @@ export function CalendarView({
             <span>รวมชายหญิง (แนะนำ)</span>
           </button>
           <button
-            onClick={() => setPersonFilter("ฝ่ายชาย")}
+            onClick={() => {
+              setPersonFilter("ฝ่ายชาย")
+              if (onSelectPerson) onSelectPerson("ฝ่ายชาย")
+            }}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
               personFilter === "ฝ่ายชาย"
                 ? "bg-emerald-600 text-white shadow-md shadow-emerald-950 font-bold"
@@ -592,7 +615,10 @@ export function CalendarView({
             <span>🏋️‍♂️</span> ชาย
           </button>
           <button
-            onClick={() => setPersonFilter("ฝ่ายหญิง")}
+            onClick={() => {
+              setPersonFilter("ฝ่ายหญิง")
+              if (onSelectPerson) onSelectPerson("ฝ่ายหญิง")
+            }}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
               personFilter === "ฝ่ายหญิง"
                 ? "bg-pink-600 text-white shadow-md shadow-pink-950 font-bold"
@@ -836,14 +862,35 @@ export function CalendarView({
       {/* Interactive Month Calendar Grid */}
       <Card className="bg-[#111726] border-[#26334d] shadow-xl overflow-hidden">
         {/* Weekday Headers */}
-        <div className="grid grid-cols-7 border-b border-[#26334d] bg-[#0c1220] text-center text-xs font-semibold text-slate-400 py-2.5">
-          <div className="text-rose-400">อาทิตย์ (Sun)</div>
-          <div>จันทร์ (Mon)</div>
-          <div>อังคาร (Tue)</div>
-          <div>พุธ (Wed)</div>
-          <div>พฤหัสบดี (Thu)</div>
-          <div className="text-cyan-400">ศุกร์ (Fri)</div>
-          <div className="text-amber-400">เสาร์ (Sat)</div>
+        <div className="grid grid-cols-7 border-b border-[#26334d] bg-[#0c1220] text-center text-[11px] sm:text-xs font-semibold text-slate-400 py-2 sm:py-2.5">
+          <div className="text-rose-400">
+            <span className="hidden sm:inline">อาทิตย์ (Sun)</span>
+            <span className="sm:hidden">อา.</span>
+          </div>
+          <div>
+            <span className="hidden sm:inline">จันทร์ (Mon)</span>
+            <span className="sm:hidden">จ.</span>
+          </div>
+          <div>
+            <span className="hidden sm:inline">อังคาร (Tue)</span>
+            <span className="sm:hidden">อ.</span>
+          </div>
+          <div>
+            <span className="hidden sm:inline">พุธ (Wed)</span>
+            <span className="sm:hidden">พ.</span>
+          </div>
+          <div>
+            <span className="hidden sm:inline">พฤหัสบดี (Thu)</span>
+            <span className="sm:hidden">พฤ.</span>
+          </div>
+          <div className="text-cyan-400">
+            <span className="hidden sm:inline">ศุกร์ (Fri)</span>
+            <span className="sm:hidden">ศ.</span>
+          </div>
+          <div className="text-amber-400">
+            <span className="hidden sm:inline">เสาร์ (Sat)</span>
+            <span className="sm:hidden">ส.</span>
+          </div>
         </div>
 
         {/* Days Grid */}
@@ -852,7 +899,7 @@ export function CalendarView({
           {Array.from({ length: firstDayOffset }).map((_, idx) => (
             <div
               key={`empty-${idx}`}
-              className="min-h-[110px] sm:min-h-[135px] bg-[#0d1424]/30 p-2 opacity-30 cursor-default"
+              className="min-h-[90px] sm:min-h-[135px] bg-[#0d1424]/30 p-1 sm:p-2 opacity-30 cursor-default"
             />
           ))}
 
@@ -866,7 +913,7 @@ export function CalendarView({
               <div
                 key={day.dateStr}
                 onClick={() => openDayDetails(day)}
-                className={`min-h-[110px] sm:min-h-[135px] p-2 flex flex-col justify-between transition-all cursor-pointer relative group ${
+                className={`min-h-[90px] sm:min-h-[135px] p-1.5 sm:p-2 flex flex-col justify-between transition-all cursor-pointer relative group ${
                   day.isToday
                     ? "ring-2 ring-emerald-400 z-10 shadow-lg shadow-emerald-950/40"
                     : ""
@@ -884,7 +931,7 @@ export function CalendarView({
                 <div className="flex items-start justify-between gap-1">
                   <div className="flex items-center gap-1">
                     <span
-                      className={`text-sm font-bold font-mono ${
+                      className={`text-xs sm:text-sm font-bold font-mono ${
                         day.isToday
                           ? "bg-emerald-500 text-slate-950 px-1.5 py-0.2 rounded-md font-extrabold"
                           : day.dayOfWeek === 0
@@ -906,28 +953,29 @@ export function CalendarView({
                   {/* Main Badge */}
                   {isAll ? (
                     <Badge
-                      className={`text-[9px] px-1.5 py-0 border-none shadow-sm font-bold flex items-center gap-0.5 ${day.coupleStatusBadgeColor}`}
+                      className={`text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0 border-none shadow-sm font-bold flex items-center gap-0.5 shrink-0 ${day.coupleStatusBadgeColor}`}
                     >
-                      {day.coupleStatus === "both_good" && <CheckCircle2 className="h-3 w-3 stroke-[3]" />}
-                      {day.coupleStatus === "both_bad" && <XCircle className="h-3 w-3" />}
-                      <span className="truncate max-w-[70px] sm:max-w-none">{day.coupleStatusLabel}</span>
+                      {day.coupleStatus === "both_good" && <CheckCircle2 className="h-2.5 w-2.5 sm:h-3 sm:w-3 stroke-[3]" />}
+                      {day.coupleStatus === "both_bad" && <XCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3" />}
+                      <span className="hidden sm:inline truncate">{day.coupleStatusLabel}</span>
+                      <span className="sm:hidden truncate">{day.coupleStatusShortLabel}</span>
                     </Badge>
                   ) : (
                     <>
                       {day.activeStatus === "good" && (
-                        <Badge className="bg-emerald-500 text-slate-950 font-extrabold text-[10px] px-1.5 py-0 flex items-center gap-0.5 shadow-sm border-none">
-                          <CheckCircle2 className="h-3 w-3 stroke-[3]" />
+                        <Badge className="bg-emerald-500 text-slate-950 font-extrabold text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 flex items-center gap-0.5 shadow-sm border-none">
+                          <CheckCircle2 className="h-2.5 w-2.5 sm:h-3 sm:w-3 stroke-[3]" />
                           <span className="hidden sm:inline">ดี</span>
                         </Badge>
                       )}
                       {day.activeStatus === "bad" && (
-                        <Badge className="bg-rose-500 text-white font-extrabold text-[10px] px-1.5 py-0 flex items-center gap-0.5 shadow-sm border-none">
-                          <XCircle className="h-3 w-3 stroke-[2.5]" />
+                        <Badge className="bg-rose-500 text-white font-extrabold text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 flex items-center gap-0.5 shadow-sm border-none">
+                          <XCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3 stroke-[2.5]" />
                           <span className="hidden sm:inline">หลุด</span>
                         </Badge>
                       )}
                       {day.activeStatus === "unrecorded" && (
-                        <span className="text-[10px] text-slate-600 font-mono">--</span>
+                        <span className="text-[9px] sm:text-[10px] text-slate-600 font-mono">--</span>
                       )}
                     </>
                   )}
@@ -935,10 +983,10 @@ export function CalendarView({
 
                 {/* Mid Section: รวมชายหญิง (แสดง 2 แถว ชาย vs หญิง แยกชัดเจน) */}
                 {isAll ? (
-                  <div className="space-y-1 my-1">
+                  <div className="space-y-0.5 sm:space-y-1 my-1">
                     {/* Male Row */}
                     <div
-                      className={`flex items-center justify-between text-[10px] font-mono px-1.5 py-0.5 rounded transition-all ${
+                      className={`flex items-center justify-between text-[9px] sm:text-[10px] font-mono px-1 sm:px-1.5 py-0.5 rounded transition-all ${
                         day.male.status === "good"
                           ? "bg-emerald-950/40 text-emerald-300 border border-emerald-500/30"
                           : day.male.status === "bad"
@@ -946,7 +994,7 @@ export function CalendarView({
                           : "text-slate-500 bg-[#0b0f19]/30"
                       }`}
                     >
-                      <span className="flex items-center gap-1 font-semibold">
+                      <span className="flex items-center gap-0.5 sm:gap-1 font-semibold truncate">
                         <span>🏋️‍♂️</span>
                         {day.male.totalCalories > 0 ? (
                           <span>{day.male.totalCalories.toLocaleString()}</span>
@@ -954,14 +1002,14 @@ export function CalendarView({
                           <span className="text-slate-600">--</span>
                         )}
                       </span>
-                      <span>
+                      <span className="shrink-0">
                         {day.male.status === "good" ? "✅" : day.male.status === "bad" ? "❌" : ""}
                       </span>
                     </div>
 
                     {/* Female Row */}
                     <div
-                      className={`flex items-center justify-between text-[10px] font-mono px-1.5 py-0.5 rounded transition-all ${
+                      className={`flex items-center justify-between text-[9px] sm:text-[10px] font-mono px-1 sm:px-1.5 py-0.5 rounded transition-all ${
                         day.female.status === "good"
                           ? "bg-pink-950/40 text-pink-300 border border-pink-500/30"
                           : day.female.status === "bad"
@@ -969,7 +1017,7 @@ export function CalendarView({
                           : "text-slate-500 bg-[#0b0f19]/30"
                       }`}
                     >
-                      <span className="flex items-center gap-1 font-semibold">
+                      <span className="flex items-center gap-0.5 sm:gap-1 font-semibold truncate">
                         <span>🧘‍♀️</span>
                         {day.female.totalCalories > 0 ? (
                           <span>{day.female.totalCalories.toLocaleString()}</span>
@@ -977,7 +1025,7 @@ export function CalendarView({
                           <span className="text-slate-600">--</span>
                         )}
                       </span>
-                      <span>
+                      <span className="shrink-0">
                         {day.female.status === "good" ? "✅" : day.female.status === "bad" ? "❌" : ""}
                       </span>
                     </div>
@@ -988,17 +1036,17 @@ export function CalendarView({
                     {day.activeCalories > 0 ? (
                       <div>
                         <div
-                          className={`text-xs font-mono font-bold leading-tight ${
+                          className={`text-[11px] sm:text-xs font-mono font-bold leading-tight ${
                             day.activeStatus === "good" ? "text-emerald-300" : "text-rose-400"
                           }`}
                         >
                           {day.activeCalories.toLocaleString()}
-                          <span className="text-[10px] text-slate-400 font-normal">
+                          <span className="text-[9px] sm:text-[10px] text-slate-400 font-normal">
                             {" "}
                             / {day.activeTargetCalories.toLocaleString()}
                           </span>
                         </div>
-                        <div className="text-[10px] leading-none">
+                        <div className="text-[9px] sm:text-[10px] leading-none">
                           {day.activeCalorieDiff >= 0 ? (
                             <span className="text-emerald-400">
                               เหลือ {day.activeCalorieDiff.toLocaleString()} kcal
@@ -1011,27 +1059,27 @@ export function CalendarView({
                         </div>
                       </div>
                     ) : !isFuture ? (
-                      <span className="text-[10px] text-slate-500">ไม่ได้จดอาหาร</span>
+                      <span className="text-[9px] sm:text-[10px] text-slate-500">ไม่ได้จดอาหาร</span>
                     ) : null}
                   </div>
                 )}
 
                 {/* Bottom Row: Activities & Quick indicators */}
-                <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-[#26334d]/40">
-                  <div className="flex items-center gap-1">
+                <div className="flex items-center justify-between text-[9px] sm:text-[10px] text-slate-400 pt-1 border-t border-[#26334d]/40">
+                  <div className="flex items-center gap-0.5 sm:gap-1">
                     {day.male.meals.length + day.female.meals.length > 0 && (
-                      <span className="text-emerald-400 font-mono" title="มื้ออาหาร">
+                      <span className="text-emerald-400 font-mono text-[9px] sm:text-[10px]" title="มื้ออาหาร">
                         🍽️{day.male.meals.length + day.female.meals.length}
                       </span>
                     )}
                     {day.male.stepCount + day.female.stepCount > 0 && (
-                      <span className="text-indigo-400 font-mono" title="ก้าวเดิน">
+                      <span className="text-indigo-400 font-mono text-[9px] sm:text-[10px]" title="ก้าวเดิน">
                         👟
                       </span>
                     )}
                   </div>
                   {day.male.weight || day.female.weight ? (
-                    <span className="text-cyan-400 font-mono text-[9px]">
+                    <span className="text-cyan-400 font-mono text-[8px] sm:text-[9px]">
                       ⚖️{isAll ? `${day.male.weight || "-"}/${day.female.weight || "-"}` : day.activeWeight}
                     </span>
                   ) : null}

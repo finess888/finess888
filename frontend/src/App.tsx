@@ -292,7 +292,7 @@ export default function App() {
               <span className="font-bold text-base text-white tracking-tight flex items-center gap-1.5">
                 แผนการกิน <span className="text-emerald-400 text-xs font-normal">Finess Meal</span>
                 <Badge className="text-[9px] px-1.5 py-0 bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
-                  v1.2 คูณเสิร์ฟ
+                  Couple Health
                 </Badge>
               </span>
               <span className="text-[10px] text-slate-400 block -mt-0.5">
@@ -446,7 +446,7 @@ export default function App() {
         )}
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8">
           {currentView === "dashboard" && (
             <DashboardView
               meals={meals}
@@ -472,7 +472,7 @@ export default function App() {
               meals={meals}
               foods={foods}
               healthLogs={healthLogs}
-              selectedPerson="ALL"
+              selectedPerson={selectedPerson}
               onSelectPerson={setSelectedPerson}
               onOpenAddMeal={(date, person) => {
                 setSelectedFoodForMeal(null)
@@ -549,6 +549,69 @@ export default function App() {
 
           {currentView === "settings" && <SettingsView onLogout={handleLogout} />}
         </main>
+
+        {/* Mobile Bottom Navigation Bar (Thumb-reachable) */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#111726]/95 backdrop-blur-lg border-t border-[#26334d] px-2 py-1.5 flex items-center justify-around shadow-2xl safe-area-bottom">
+          <button
+            onClick={() => setCurrentView("dashboard")}
+            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-all ${
+              currentView === "dashboard"
+                ? "text-emerald-400 font-bold"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <LayoutDashboard className="h-4 w-4" />
+            <span className="text-[10px]">ภาพรวม</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentView("calendar")}
+            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-all ${
+              currentView === "calendar"
+                ? "text-emerald-400 font-bold"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <CalendarCheck className="h-4 w-4" />
+            <span className="text-[10px]">ปฏิทิน</span>
+          </button>
+
+          {/* Center Elevated Action Button */}
+          <button
+            onClick={() => {
+              setSelectedFoodForMeal(null)
+              setSelectedDateForMeal("")
+              setAddMealOpen(true)
+            }}
+            className="flex flex-col items-center -mt-5 group"
+            title="เพิ่มมื้ออาหาร"
+          >
+            <div className="h-11 w-11 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-lg shadow-emerald-950/60 group-hover:scale-105 transition-transform border-2 border-[#111726]">
+              <Plus className="h-6 w-6 stroke-[2.5]" />
+            </div>
+            <span className="text-[9px] text-emerald-300 font-semibold mt-0.5">จดมื้ออาหาร</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentView("mealplan")}
+            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-all ${
+              currentView === "mealplan"
+                ? "text-emerald-400 font-bold"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <CalendarDays className="h-4 w-4" />
+            <span className="text-[10px]">มื้ออาหาร</span>
+          </button>
+
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl text-slate-400 hover:text-white transition-all"
+          >
+            <Menu className="h-4 w-4" />
+            <span className="text-[10px]">เมนูอื่น</span>
+          </button>
+        </nav>
       </div>
 
       {/* Modals */}

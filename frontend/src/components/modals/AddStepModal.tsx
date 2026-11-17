@@ -165,12 +165,15 @@ export function AddStepModal({
           <div className="space-y-1.5">
             <Label className="text-xs text-slate-200 font-medium">จำนวนก้าวเดิน (Steps)</Label>
             <Input
-              type="number"
-              min={100}
-              max={100000}
-              step={100}
-              value={steps}
-              onChange={(e) => setSteps(Number(e.target.value))}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="off"
+              value={steps === "" ? "" : steps}
+              onChange={(e) => {
+                const val = e.target.value.replace(/[^0-9]/g, "")
+                setSteps(val === "" ? "" : Number(val))
+              }}
               placeholder="เช่น 8000 หรือ 10000"
               className="bg-[#0b0f19] border-[#26334d] text-white text-xl font-extrabold text-center h-12 focus:ring-1 focus:ring-indigo-400 font-mono"
               required
