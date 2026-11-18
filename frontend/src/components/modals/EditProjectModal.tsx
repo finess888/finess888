@@ -11,8 +11,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Target, Scale, Flame, Calendar, Clock, Check, Sparkles } from "lucide-react"
-import { FitnessProject, updateProject, getProjects, saveProjects } from "@/lib/projectManager"
+import { Target, Scale, Flame, Calendar, Clock, Check, Sparkles, Pencil } from "lucide-react"
+import { FitnessProject, updateProject, getProjects, saveProjects, getActiveProject, DEFAULT_PROJECTS } from "@/lib/projectManager"
 import { callGasApi } from "@/api/gasClient"
 import { toast } from "sonner"
 
@@ -29,6 +29,8 @@ export function EditProjectModal({
   project,
   onSaved,
 }: EditProjectModalProps) {
+  const effectiveProject = project || getActiveProject("ฝ่ายชาย") || DEFAULT_PROJECTS[0]
+
   const [title, setTitle] = React.useState("")
   const [targetKg, setTargetKg] = React.useState<number>(10)
   const [startWeight, setStartWeight] = React.useState<number>(100.0)
@@ -41,19 +43,20 @@ export function EditProjectModal({
   const [saving, setSaving] = React.useState(false)
 
   React.useEffect(() => {
-    if (open && project) {
-      setTitle(project.title || "")
-      const kg = Number(project.targetFatLossKg) || 10
+    if (open) {
+      const p = project || getActiveProject("ฝ่ายชาย") || DEFAULT_PROJECTS[0]
+      setTitle(p.title || "")
+      const kg = Number(p.targetFatLossKg) || 10
       setTargetKg(kg)
-      const sw = Number(project.startWeight) || 100.0
+      const sw = Number(p.startWeight) || 100.0
       setStartWeight(sw)
-      const tw = project.targetWeight !== undefined ? Number(project.targetWeight) : Math.max(30, Number((sw - kg).toFixed(1)))
+      const tw = p.targetWeight !== undefined ? Number(p.targetWeight) : Math.max(30, Number((sw - kg).toFixed(1)))
       setTargetWeight(tw)
-      setTargetDeficitKcal(project.targetDeficitKcal || kg * 7500)
-      setTargetDailySteps(project.targetDailySteps || 8000)
-      setStartDate(project.startDate || new Date().toLocaleDateString("en-CA"))
-      setDeadlineDate(project.deadlineDate || "")
-      setNotes(project.notes || "")
+      setTargetDeficitKcal(p.targetDeficitKcal || kg * 7500)
+      setTargetDailySteps(p.targetDailySteps || 8000)
+      setStartDate(p.startDate || new Date().toLocaleDateString("en-CA"))
+      setDeadlineDate(p.deadlineDate || "")
+      setNotes(p.notes || "")
     }
   }, [open, project])
 
@@ -73,7 +76,6 @@ export function EditProjectModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!project) return
 
     if (!title.trim()) {
       toast.warning("กรุณาระบุชื่อโปรเจกต์")
@@ -99,13 +101,14 @@ export function EditProjectModal({
         notes: notes.trim(),
       }
 
-      const updated = updateProject(project.id, updates)
+      const pId = project?.id || effectiveProject.id
+      const updated = updateProject(pId, updates)
       if (updated) {
         const allProjects = getProjects()
         await callGasApi("SAVE_PROJECTS", allProjects).catch(() => {})
         onSaved(updated)
         toast.success(`อัปเดตโปรเจกต์ลด ${targetKg} กก. เรียบร้อยแล้ว!`, {
-          description: `เป้าหมายลด ${targetKg} กก. (เริ่ม ${startWeight} ➔ เป้า ${targetWeight} กก.) • ซิงค์ขึ้นคลาวด์แล้ว`,
+          description: `เป้าหมายลด ${targetKg} กก. (เริ่ม ${startWeight} ➔ เป้า ${targetWeight} กก.) • ซิงค์ทุกอุปกรณ์แล้ว`,
         })
         onOpenChange(false)
       }
@@ -116,19 +119,17 @@ export function EditProjectModal({
     }
   }
 
-  if (!project) return null
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg bg-[#111726] border-[#26334d] text-white p-6 rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle className="text-lg font-bold flex items-center gap-2 text-white">
-              <Target className="h-5 w-5 text-emerald-400" />
-              แก้ไขเป้าหมายโปรเจกต์ ({project.person})
+              <Pencil className="h-5 w-5 text-amber-400" />
+              แก้ไขเป้าหมายโปรเจกต์ ({effectiveProject.person})
             </DialogTitle>
             <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-xs">
-              {project.person}
+              {effectiveProject.person}
             </Badge>
           </div>
           <p className="text-xs text-slate-400">

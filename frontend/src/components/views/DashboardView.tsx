@@ -1509,6 +1509,17 @@ export function DashboardView({
           setActiveProject(getActiveProject(isFemale ? "ฝ่ายหญิง" : "ฝ่ายชาย"))
         }}
       />
+
+      {/* Edit Active Project Modal */}
+      <EditProjectModal
+        open={editProjectOpen}
+        onOpenChange={setEditProjectOpen}
+        project={activeProject || getActiveProject(isFemale ? "ฝ่ายหญิง" : "ฝ่ายชาย")}
+        onSaved={(updated) => {
+          setActiveProject(updated)
+          setTargetFatLossKg(updated.targetFatLossKg)
+        }}
+      />
     </div>
   )
 }

@@ -159,9 +159,15 @@ export default function App() {
     toast.info("ออกจากระบบแล้ว")
   }
 
-  // Handle add meal
+  // Handle add meal (supports both single meal and batch array of meals)
   const handleSaveMeal = async (newMeal: any) => {
-    await callGasApi("ADD_MEAL", newMeal)
+    if (Array.isArray(newMeal)) {
+      for (const m of newMeal) {
+        await callGasApi("ADD_MEAL", m)
+      }
+    } else {
+      await callGasApi("ADD_MEAL", newMeal)
+    }
     await refetch()
   }
 
