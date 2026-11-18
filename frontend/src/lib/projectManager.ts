@@ -254,9 +254,8 @@ export function analyzeProject(
 
   const avgDailyIntake = loggedDays.length > 0 ? Math.round(totalIntakeCalories / loggedDays.length) : 0
 
-  // Deficit achieved: combined from weight drop and meals
-  const weightBasedDeficit = weightLost * 7500
-  const deficitAchieved = Math.max(weightBasedDeficit, accumulatedMealsDeficit)
+  // Deficit achieved: PURELY from meals / intake vs maintenance (DO NOT mix weightLost * 7500)
+  const deficitAchieved = Math.max(0, accumulatedMealsDeficit)
   const totalDeficitTarget = project.targetDeficitKcal || project.targetFatLossKg * 7500
   const deficitProgressPct = Math.min(100, Math.round((deficitAchieved / totalDeficitTarget) * 100))
 

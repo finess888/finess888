@@ -28,7 +28,7 @@ export function FoodDatabaseView({
   const [selectedCategory, setSelectedCategory] = React.useState("ALL")
 
   const categories = React.useMemo(() => {
-    const list = ["ALL", "EAT AM ARE"]
+    const list = ["ALL", "EAT AM ARE", "อี้จา"]
     const foundCats = new Set<string>()
     foods.forEach((f) => {
       const c = String(f.Category || f.category || "").trim()

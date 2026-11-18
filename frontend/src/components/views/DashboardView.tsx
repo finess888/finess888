@@ -235,15 +235,15 @@ export function DashboardView({
     accumulatedIntakeDeficit += deficit
   })
 
-  // Combined accumulated deficit
-  const accumulatedDeficitKcal = Math.max(
-    weightLostSoFar * 7500,
-    accumulatedIntakeDeficit
-  )
+  // SEPARATE DEFICIT FROM WEIGHT:
+  // 1. Deficit is purely from intake vs maintenance
+  const accumulatedDeficitKcal = Math.max(0, accumulatedIntakeDeficit);
+  const deficitProgressPercent = Math.min(100, Math.max(0, (accumulatedDeficitKcal / totalDeficitTargetKcal) * 100));
+  const remainingDeficitKcal = Math.max(0, totalDeficitTargetKcal - accumulatedDeficitKcal);
 
-  const progressPercent = Math.min(100, (accumulatedDeficitKcal / totalDeficitTargetKcal) * 100)
-  const remainingKcal = Math.max(0, totalDeficitTargetKcal - accumulatedDeficitKcal)
-  const remainingFatKg = (remainingKcal / 7500).toFixed(1)
+  // 2. Weight progress is purely from weight lost in kg
+  const weightProgressPercent = Math.min(100, Math.max(0, (weightLostSoFar / targetFatLossKg) * 100));
+  const remainingFatKg = Math.max(0, Number((targetFatLossKg - weightLostSoFar).toFixed(1)));
 
   // Male Active Meals & Nutrients
   const maleMealsAll = meals.filter((m) => {
@@ -927,79 +927,143 @@ export function DashboardView({
         </CardHeader>
 
         <CardContent className="p-6 space-y-5">
-          {/* Main Target Metrics Banner */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div className="bg-[#0b0f19] p-4 rounded-xl border border-[#26334d]">
-              <span className="text-xs text-slate-400 block mb-1">🎯 เป้าหมายโปรเจกต์นี้</span>
-              <div className="text-2xl font-bold text-white flex items-baseline gap-1">
-                <span>{activeProject ? activeProject.targetFatLossKg : targetFatLossKg}</span>
-                <span className="text-sm font-normal text-slate-400">กิโลกรัม (kg)</span>
+          {/* แยกเป้าหมายตัดทอน กับเป้าหมายน้ำหนักตัวออกจากกันอย่างชัดเจน */}
+          {(() => {
+            const displayDeficitTarget = activeProject?.targetDeficitKcal || totalDeficitTargetKcal;
+            const displayDeficitAchieved = projectAnalysis ? projectAnalysis.deficitAchieved : accumulatedDeficitKcal;
+            const displayDeficitRemaining = Math.max(0, displayDeficitTarget - displayDeficitAchieved);
+            const displayDeficitPct = Math.min(100, Math.max(0, projectAnalysis ? projectAnalysis.deficitProgressPct : deficitProgressPercent));
+
+            const displayTargetKg = activeProject ? activeProject.targetFatLossKg : targetFatLossKg;
+            const displayStartWeight = projectAnalysis?.startWeight || START_WEIGHT;
+            const displayGoalWeight = activeProject?.targetWeight || (START_WEIGHT - targetFatLossKg);
+            const displayCurrentWeight = projectAnalysis?.currentWeight || currentWeight;
+            const displayWeightLost = projectAnalysis?.weightLost !== undefined ? projectAnalysis.weightLost : weightLostSoFar;
+            const displayWeightRemaining = projectAnalysis?.weightRemaining !== undefined ? projectAnalysis.weightRemaining : remainingFatKg;
+            const displayWeightPct = Math.min(100, Math.max(0, projectAnalysis ? projectAnalysis.weightProgressPct : weightProgressPercent));
+
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* 1. CALORIE DEFICIT GOAL (จากอาหารจริงล้วนๆ) */}
+                <div className="bg-[#0b0f19] p-4 rounded-xl border border-amber-500/30 space-y-3">
+                  <div className="flex items-center justify-between border-b border-[#26334d] pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Flame className="h-4 w-4 text-amber-400" />
+                      <span className="text-sm font-bold text-white">1. เป้าหมายตัดทอนแคลอรี่ (Calorie Deficit)</span>
+                    </div>
+                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[10px]">
+                      คำนวณจากอาหารจริง
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="bg-[#121826] p-2.5 rounded-lg border border-[#26334d]">
+                      <span className="text-slate-400 block text-[10px]">เป้าตัดทอนรวม</span>
+                      <span className="text-base font-bold text-amber-400 font-mono">
+                        {displayDeficitTarget.toLocaleString()}
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">kcal</span>
+                    </div>
+
+                    <div className="bg-[#121826] p-2.5 rounded-lg border border-[#26334d]">
+                      <span className="text-slate-400 block text-[10px]">ตัดทอนสะสมได้จริง</span>
+                      <span className={"text-base font-bold font-mono " + (displayDeficitAchieved > 0 ? "text-emerald-400" : "text-slate-300")}>
+                        {Math.round(displayDeficitAchieved).toLocaleString()}
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">kcal</span>
+                    </div>
+
+                    <div className="bg-[#121826] p-2.5 rounded-lg border border-[#26334d]">
+                      <span className="text-slate-400 block text-[10px]">เหลือต้องตัดทอน</span>
+                      <span className="text-base font-bold text-slate-300 font-mono">
+                        {Math.round(displayDeficitRemaining).toLocaleString()}
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">kcal</span>
+                    </div>
+                  </div>
+
+                  {/* Progress Bar for Deficit */}
+                  <div className="space-y-1.5 bg-[#121826] p-3 rounded-lg border border-[#26334d]">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-300 text-[11px] font-medium">ความคืบหน้าตัดทอนแคลอรี่</span>
+                      <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[11px] font-mono font-bold">
+                        {"ทำไปแล้ว " + displayDeficitPct.toFixed(1) + "%"}
+                      </Badge>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden p-0.5">
+                      <div
+                        className="bg-gradient-to-r from-amber-500 to-orange-400 h-1.5 rounded-full transition-all duration-700"
+                        style={{ width: Math.max(displayDeficitPct > 0 ? 2 : 0, Math.min(100, displayDeficitPct)) + "%" }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-slate-400 pt-0.5">
+                      <span>0 kcal (0%)</span>
+                      <span className="font-mono">{Math.round(displayDeficitAchieved).toLocaleString()} / {displayDeficitTarget.toLocaleString()} kcal</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. BODY WEIGHT GOAL (จากการชั่งน้ำหนักจริงล้วนๆ) */}
+                <div className="bg-[#0b0f19] p-4 rounded-xl border border-emerald-500/30 space-y-3">
+                  <div className="flex items-center justify-between border-b border-[#26334d] pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Scale className="h-4 w-4 text-emerald-400" />
+                      <span className="text-sm font-bold text-white">2. เป้าหมายน้ำหนักตัว (Body Weight)</span>
+                    </div>
+                    <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px]">
+                      คำนวณจากการชั่งจริง
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="bg-[#121826] p-2.5 rounded-lg border border-[#26334d]">
+                      <span className="text-slate-400 block text-[10px]">เป้าหมายลด</span>
+                      <span className="text-base font-bold text-white font-mono">
+                        {displayTargetKg}
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">กก. (เป้า {displayGoalWeight} กก.)</span>
+                    </div>
+
+                    <div className="bg-[#121826] p-2.5 rounded-lg border border-[#26334d]">
+                      <span className="text-slate-400 block text-[10px]">ลดได้จริงแล้ว</span>
+                      <span className="text-base font-bold text-emerald-300 font-mono">
+                        {displayWeightLost}
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">กก. (ล่าสุด {displayCurrentWeight} กก.)</span>
+                    </div>
+
+                    <div className="bg-[#121826] p-2.5 rounded-lg border border-[#26334d]">
+                      <span className="text-slate-400 block text-[10px]">เหลืออีก</span>
+                      <span className="text-base font-bold text-slate-300 font-mono">
+                        {displayWeightRemaining}
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">กก. จนถึงเป้า</span>
+                    </div>
+                  </div>
+
+                  {/* Progress Bar for Weight */}
+                  <div className="space-y-1.5 bg-[#121826] p-3 rounded-lg border border-[#26334d]">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-300 text-[11px] font-medium">ความคืบหน้าน้ำหนักตัว</span>
+                      <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[11px] font-mono font-bold">
+                        {"ลดได้แล้ว " + displayWeightPct.toFixed(1) + "%"}
+                      </Badge>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden p-0.5">
+                      <div
+                        className="bg-gradient-to-r from-emerald-500 to-teal-400 h-1.5 rounded-full transition-all duration-700"
+                        style={{ width: Math.max(displayWeightPct > 0 ? 2 : 0, Math.min(100, displayWeightPct)) + "%" }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-slate-400 pt-0.5">
+                      <span>เริ่ม {displayStartWeight} กก. (0%)</span>
+                      <span className="font-mono">ลดได้ {displayWeightLost} / {displayTargetKg} กก.</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1">
-                เริ่ม {projectAnalysis?.startWeight || START_WEIGHT} ➔ เป้า {activeProject?.targetWeight || (START_WEIGHT - targetFatLossKg)} กก.
-              </p>
-            </div>
-
-            <div className="bg-[#0b0f19] p-4 rounded-xl border border-[#26334d]">
-              <span className="text-xs text-slate-400 block mb-1">🔥 ต้องตัดทอนแคลอรี่รวม</span>
-              <div className="text-2xl font-bold text-amber-400 flex items-baseline gap-1">
-                <span>{(activeProject?.targetDeficitKcal || totalDeficitTargetKcal).toLocaleString()}</span>
-                <span className="text-sm font-normal text-slate-400">kcal</span>
-              </div>
-              <p className="text-[11px] text-slate-500 mt-1">
-                คำนวณจาก {activeProject?.targetFatLossKg || targetFatLossKg} × 7,500 kcal
-              </p>
-            </div>
-
-            <div className="bg-[#0b0f19] p-4 rounded-xl border border-[#26334d]">
-              <span className="text-xs text-slate-400 block mb-1">⚡ ตัดทอนสะสมได้จริง</span>
-              <div className="text-2xl font-bold text-emerald-400 flex items-baseline gap-1">
-                <span>{Math.round(projectAnalysis?.deficitAchieved || accumulatedDeficitKcal).toLocaleString()}</span>
-                <span className="text-sm font-normal text-slate-400">kcal</span>
-              </div>
-              <p className="text-[11px] text-emerald-400/90 mt-1">
-                สำเร็จ {projectAnalysis?.deficitProgressPct || progressPercent.toFixed(0)}% ของเป้าหมาย
-              </p>
-            </div>
-
-            <div className="bg-[#0b0f19] p-4 rounded-xl border border-[#26334d]">
-              <span className="text-xs text-slate-400 block mb-1">📉 ลดได้จริงแล้ว</span>
-              <div className="text-2xl font-bold text-emerald-300 flex items-baseline gap-1">
-                <span>{projectAnalysis?.weightLost || (accumulatedDeficitKcal / 7500).toFixed(1)}</span>
-                <span className="text-sm font-normal text-slate-400">กิโลกรัม</span>
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1">
-                เหลืออีก {projectAnalysis?.weightRemaining || remainingFatKg} กก. จนถึงเป้าหมาย
-              </p>
-            </div>
-          </div>
-
-          {/* Visual Progress Bar & % */}
-          <div className="space-y-2 bg-[#0b0f19]/80 p-4 rounded-xl border border-[#26334d]">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-white">ความคืบหน้ารวมต่อเป้าหมาย</span>
-                <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[11px]">
-                  ทำไปแล้ว {projectAnalysis?.deficitProgressPct || progressPercent.toFixed(1)}%
-                </Badge>
-              </div>
-              <span className="text-xs text-slate-400 font-mono">
-                {Math.round(projectAnalysis?.deficitAchieved || accumulatedDeficitKcal).toLocaleString()} / {(activeProject?.targetDeficitKcal || totalDeficitTargetKcal).toLocaleString()} kcal
-              </span>
-            </div>
-
-            <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden p-0.5">
-              <div
-                className="bg-gradient-to-r from-emerald-500 to-teal-400 h-2 rounded-full transition-all duration-700 shadow-lg shadow-emerald-500/50"
-                style={{ width: `${Math.max(2, Math.min(100, projectAnalysis?.deficitProgressPct || progressPercent))}%` }}
-              />
-            </div>
-
-            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
-              <span>จุดเริ่มต้น: 0 kcal (0%)</span>
-              <span>เป้าหมายความสำเร็จ: {(activeProject?.targetDeficitKcal || totalDeficitTargetKcal).toLocaleString()} kcal (100%)</span>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* 💡 Quick Retrospective Summary Bar (ตอบโจทย์: กินเกินไหม / ออกกำลังกาย / ปรับตัว) */}
           <div className="p-3.5 rounded-xl bg-gradient-to-r from-[#0d1527] to-[#121c33] border border-indigo-500/30 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
