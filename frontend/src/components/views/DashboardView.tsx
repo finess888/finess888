@@ -47,6 +47,7 @@ import { getDailyStepLogs } from "@/lib/exerciseDatabase"
 import { CalorieSettingsModal } from "@/components/modals/CalorieSettingsModal"
 import { ProjectReviewModal } from "@/components/modals/ProjectReviewModal"
 import { SetStepGoalModal } from "@/components/modals/SetStepGoalModal"
+import { EditProjectModal } from "@/components/modals/EditProjectModal"
 import { formatThaiDate } from "@/lib/utils"
 import { Doughnut, Bar } from "react-chartjs-2"
 import {
@@ -149,6 +150,7 @@ export function DashboardView({
   // Weight Loss Project & Deadline state
   const [projectModalOpen, setProjectModalOpen] = React.useState(false)
   const [stepGoalModalOpen, setStepGoalModalOpen] = React.useState(false)
+  const [editProjectOpen, setEditProjectOpen] = React.useState(false)
   const [activeProject, setActiveProject] = React.useState<FitnessProject | null>(() =>
     getActiveProject(isFemale ? "ฝ่ายหญิง" : "ฝ่ายชาย")
   )
@@ -905,11 +907,8 @@ export function DashboardView({
 
             {/* Project Action Buttons */}
             <div className="flex items-center gap-2 flex-wrap">
-              <Button
-                onClick={() => setProjectModalOpen(true)}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold h-8 px-3 shadow-md shadow-emerald-950 flex items-center gap-1.5"
-                title="ดูบทสรุปและรีวิวโปรเจกต์ย้อนหลัง"
-              >
+              <Button onClick={() => setEditProjectOpen(true)} className="bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold h-8 px-3 shadow-md shadow-amber-950 flex items-center gap-1.5" title="แก้ไขเป้าหมายกิโลกรัมที่ต้องการลดและเดดไลน์ของโปรเจกต์นี้"><Pencil className="h-3.5 w-3.5" />แก้ไขโปรเจกต์</Button>
+              <Button onClick={() => setProjectModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold h-8 px-3 shadow-md shadow-emerald-950 flex items-center gap-1.5" title="ดูบทสรุปและรีวิวโปรเจกต์ย้อนหลัง">
                 <Trophy className="h-3.5 w-3.5 text-amber-300" />
                 สรุปผลรีวิวโปรเจกต์
               </Button>
@@ -1017,7 +1016,7 @@ export function DashboardView({
 
                   <div className="grid grid-cols-3 gap-2 text-xs">
                     <div className="bg-[#121826] p-2.5 rounded-lg border border-[#26334d]">
-                      <span className="text-slate-400 block text-[10px]">เป้าหมายลด</span>
+                      <div className="flex items-center justify-between"><span className="text-slate-400 block text-[10px]">เป้าหมายลด</span><button type="button" onClick={() => setEditProjectOpen(true)} className="text-[10px] text-amber-400 hover:underline flex items-center gap-0.5" title="แก้ไขจำนวนกิโลกรัม"><Pencil className="h-2.5 w-2.5" /><span>แก้ไข</span></button></div>
                       <span className="text-base font-bold text-white font-mono">
                         {displayTargetKg}
                       </span>

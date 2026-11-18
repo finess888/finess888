@@ -29,6 +29,7 @@ import {
 } from "@/lib/exerciseDatabase"
 import { getCalorieSettings, saveCalorieSettings } from "@/lib/calorieSettings"
 import { AddStepModal } from "@/components/modals/AddStepModal"
+import { EditProjectModal } from "@/components/modals/EditProjectModal"
 import { formatThaiDate } from "@/lib/utils"
 import {
   Target,
@@ -96,6 +97,7 @@ export function ProjectReviewModal({
 
   // Step goal & quick logging state
   const [addStepOpen, setAddStepOpen] = React.useState(false)
+  const [editModalOpen, setEditModalOpen] = React.useState(false)
   const [editingStepGoal, setEditingStepGoal] = React.useState(false)
   const [inputStepGoal, setInputStepGoal] = React.useState<number>(8000)
   const [formDailySteps, setFormDailySteps] = React.useState<number>(8000)
