@@ -454,9 +454,9 @@ export default function App() {
               healthLogs={healthLogs}
               selectedPerson={selectedPerson}
               onSelectPerson={setSelectedPerson}
-              onOpenAddMeal={() => {
+              onOpenAddMeal={(date) => {
                 setSelectedFoodForMeal(null)
-                setSelectedDateForMeal("")
+                setSelectedDateForMeal(date || "")
                 setAddMealOpen(true)
               }}
               onOpenAddWeight={() => setAddWeightOpen(true)}

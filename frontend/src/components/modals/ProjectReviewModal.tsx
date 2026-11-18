@@ -79,8 +79,8 @@ export function ProjectReviewModal({
   const [selectedProjectId, setSelectedProjectId] = React.useState<string>("")
 
   // Form state for creating new project
-  const todayStr = new Date().toISOString().split("T")[0]
-  const defaultDeadline = new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+  const todayStr = new Date().toLocaleDateString("en-CA")
+  const defaultDeadline = new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toLocaleDateString("en-CA")
   const isMale = currentPerson === "ฝ่ายชาย"
 
   const [formTitle, setFormTitle] = React.useState("")

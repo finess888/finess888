@@ -24,7 +24,7 @@ export function AddWeightModal({
   onSave,
   defaultPerson = "ฝ่ายชาย",
 }: AddWeightModalProps) {
-  const todayStr = new Date().toISOString().split("T")[0]
+  const todayStr = new Date().toLocaleDateString("en-CA")
   const [date, setDate] = React.useState(todayStr)
   const [person, setPerson] = React.useState(defaultPerson)
   const [weight, setWeight] = React.useState<number | string>(person === "ฝ่ายชาย" ? 100.0 : 65.0)

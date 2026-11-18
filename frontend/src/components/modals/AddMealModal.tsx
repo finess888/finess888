@@ -40,7 +40,7 @@ export function AddMealModal({
   initialFood = null,
   initialDate = "",
 }: AddMealModalProps) {
-  const todayStr = new Date().toISOString().split("T")[0]
+  const todayStr = new Date().toLocaleDateString("en-CA")
   const [date, setDate] = React.useState(initialDate || todayStr)
   const [person, setPerson] = React.useState(defaultPerson)
   const [mealType, setMealType] = React.useState("01. มื้อเช้า")

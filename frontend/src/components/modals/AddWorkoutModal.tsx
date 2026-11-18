@@ -38,7 +38,7 @@ export function AddWorkoutModal({
   onSaved,
 }: AddWorkoutModalProps) {
   const exercises = React.useMemo(() => getExerciseDatabase(), [])
-  const todayStr = new Date().toISOString().split("T")[0]
+  const todayStr = new Date().toLocaleDateString("en-CA")
 
   const [date, setDate] = React.useState(todayStr)
   const [person, setPerson] = React.useState<"ฝ่ายชาย" | "ฝ่ายหญิง">(

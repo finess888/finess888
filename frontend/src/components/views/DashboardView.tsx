@@ -30,6 +30,8 @@ import {
   Activity,
   Footprints,
   Pencil,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import {
   AllCalorieSettings,
@@ -78,7 +80,7 @@ interface DashboardViewProps {
   healthLogs: any[]
   selectedPerson: string
   onSelectPerson: (person: string) => void
-  onOpenAddMeal: () => void
+  onOpenAddMeal: (date?: string) => void
   onOpenAddWeight: () => void
   onOpenAddStep?: () => void
   onToggleMealStatus: (id: string, currentStatus: string) => void
@@ -196,12 +198,27 @@ export function DashboardView({
     return p === selectedPerson || p === "ทั้งคู่"
   })
 
-  // Date selection (default today or latest logged date)
-  const todayStr = new Date().toISOString().split("T")[0]
-  const allMealDates = meals.map((m) => String(m.date || m.Date || "").split("T")[0]).filter(Boolean)
-  const hasTodayMeals = allMealDates.includes(todayStr)
-  const latestDate = allMealDates.length > 0 ? allMealDates[allMealDates.length - 1] : todayStr
-  const activeDate = hasTodayMeals ? todayStr : latestDate
+  // Date selection: Default to local today YYYY-MM-DD in user's timezone
+  const todayStr = new Date().toLocaleDateString("en-CA")
+  const [selectedDate, setSelectedDate] = React.useState<string>(todayStr)
+  const activeDate = selectedDate || todayStr
+  const isToday = activeDate === todayStr
+
+  const handlePrevDay = () => {
+    const cur = new Date(activeDate + "T12:00:00")
+    cur.setDate(cur.getDate() - 1)
+    setSelectedDate(cur.toLocaleDateString("en-CA"))
+  }
+
+  const handleNextDay = () => {
+    const cur = new Date(activeDate + "T12:00:00")
+    cur.setDate(cur.getDate() + 1)
+    setSelectedDate(cur.toLocaleDateString("en-CA"))
+  }
+
+  const handleToday = () => {
+    setSelectedDate(todayStr)
+  }
 
   // Group meals by date to calculate daily intake deficits
   const dateIntakeMap: Record<string, number> = {}
@@ -378,7 +395,7 @@ export function DashboardView({
   for (let i = 6; i >= 0; i--) {
     const d = new Date()
     d.setDate(d.getDate() - i)
-    const iso = d.toISOString().split("T")[0]
+    const iso = d.toLocaleDateString("en-CA")
     last7Days.push(iso)
     const dayNames = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."]
     last7DaysLabels.push(`${dayNames[d.getDay()]} (${d.getDate()})`)
@@ -534,12 +551,73 @@ export function DashboardView({
           )}
 
           <Button
-            onClick={onOpenAddMeal}
+            onClick={() => onOpenAddMeal(activeDate)}
             className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium flex items-center gap-1.5 h-9 px-3 shadow-md shadow-emerald-950"
           >
             <Plus className="h-4 w-4" />
             + เพิ่มมื้ออาหาร
           </Button>
+        </div>
+      </div>
+
+      {/* 📅 Date Navigator Bar: ค่าเริ่มต้นคือ "วันนี้" เสมอ พร้อมปุ่มเลื่อนวันและดูย้อนหลัง */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#111726] border border-[#26334d] p-3 rounded-2xl shadow-lg">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrevDay}
+            className="border-[#26334d] bg-[#0b0f19] text-slate-300 hover:text-white hover:bg-slate-800 h-8 px-2.5"
+            title="ดูวันก่อนหน้า"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+
+          <div className="px-3.5 py-1.5 bg-[#0b0f19] border border-[#26334d] rounded-xl text-sm font-bold text-white font-mono flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-emerald-400" />
+            <span>{formatThaiDate(activeDate)}</span>
+            {isToday ? (
+              <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px] px-2 py-0.5">
+                🌟 วันนี้
+              </Badge>
+            ) : (
+              <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[10px] px-2 py-0.5">
+                📅 ดูย้อนหลัง
+              </Badge>
+            )}
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleNextDay}
+            className="border-[#26334d] bg-[#0b0f19] text-slate-300 hover:text-white hover:bg-slate-800 h-8 px-2.5"
+            title="ดูวันถัดไป"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+
+          {!isToday && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleToday}
+              className="text-xs text-emerald-400 hover:text-white hover:bg-emerald-900/30 h-8 px-2.5 font-bold flex items-center gap-1"
+            >
+              <span>กลับมาวันนี้</span>
+            </Button>
+          )}
+        </div>
+
+        {/* Date Picker Input */}
+        <div className="flex items-center gap-2 text-xs text-slate-300 bg-[#0b0f19] px-3 py-1 rounded-xl border border-[#26334d]">
+          <span className="text-[11px] text-slate-400">เลือกวันที่:</span>
+          <Input
+            type="date"
+            value={activeDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="bg-transparent border-none text-white text-xs h-7 w-32 p-0 focus:ring-0 font-mono"
+          />
         </div>
       </div>
 
@@ -1012,7 +1090,7 @@ export function DashboardView({
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <div>
               <CardTitle className="text-xs font-semibold text-white flex items-center gap-1">
-                แคลอรี่วันนี้ (โควต้ากิน)
+                {isToday ? "แคลอรี่วันนี้ (โควต้ากิน)" : `แคลอรี่วันที่ ${formatThaiDate(activeDate)}`}
               </CardTitle>
               <span className="text-[10px] text-slate-400">
                 เผาผลาญ {MAINTENANCE_CALORIES.toLocaleString()} - ตัดทอน {DEFICIT_TARGET.toLocaleString()}
@@ -1051,7 +1129,7 @@ export function DashboardView({
               </span>
             </div>
             <div className="mt-2 pt-2 border-t border-[#26334d]/60 flex items-center justify-between text-[11px]">
-              <span className="text-slate-400">ตัดทอนวันนี้:</span>
+              <span className="text-slate-400">{isToday ? "ตัดทอนวันนี้:" : "ตัดทอนวันที่ดู:"}</span>
               <span className={`font-mono font-semibold ${
                 MAINTENANCE_CALORIES - totalCalories >= DEFICIT_TARGET
                   ? "text-emerald-400"
@@ -1227,7 +1305,7 @@ export function DashboardView({
           <div>
             <CardTitle className="text-base font-semibold text-white flex items-center gap-2">
               <UtensilsCrossed className="h-4 w-4 text-emerald-400" />
-              มื้ออาหารประจำวันที่ {activeDate} ({isAll ? "รวมทั้งคู่ ชาย & หญิง" : selectedPerson} - {activeDateMeals.length} รายการ)
+              มื้ออาหารประจำวันที่ {formatThaiDate(activeDate)} {isToday && "(วันนี้)"} ({isAll ? "รวมทั้งคู่ ชาย & หญิง" : selectedPerson} - {activeDateMeals.length} รายการ)
             </CardTitle>
             <CardDescription className="text-slate-400 text-xs">
               ข้อมูลที่บันทึกไว้ใน Google Sheets (B หน้าจดบันทึก)
@@ -1235,7 +1313,7 @@ export function DashboardView({
           </div>
           <div className="flex items-center gap-2">
             <Button
-              onClick={onOpenAddMeal}
+              onClick={() => onOpenAddMeal(activeDate)}
               size="sm"
               className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs flex items-center gap-1"
             >
@@ -1256,13 +1334,17 @@ export function DashboardView({
         <CardContent>
           {activeDateMeals.length === 0 ? (
             <div className="text-center py-8 border border-dashed border-[#26334d] rounded-xl">
-              <p className="text-slate-400 text-sm">ยังไม่มีมื้ออาหารที่บันทึกไว้สำหรับ {isAll ? "ทั้งคู่" : selectedPerson} ในวันที่ {activeDate}</p>
+              <p className="text-slate-400 text-sm">
+                {isToday
+                  ? `ยังไม่มีมื้ออาหารที่บันทึกไว้สำหรับ ${isAll ? "ทั้งคู่" : selectedPerson} ในวันนี้ (${formatThaiDate(activeDate)})`
+                  : `ไม่มีมื้ออาหารที่บันทึกไว้สำหรับ ${isAll ? "ทั้งคู่" : selectedPerson} ในวันที่ ${formatThaiDate(activeDate)}`}
+              </p>
               <Button
-                onClick={onOpenAddMeal}
+                onClick={() => onOpenAddMeal(activeDate)}
                 variant="outline"
                 className="mt-3 text-xs border-[#26334d] text-emerald-400 hover:bg-emerald-500/10"
               >
-                + บันทึกมื้ออาหารของวันนี้
+                + บันทึกมื้ออาหารของ{isToday ? "วันนี้" : "วันที่นี้"}
               </Button>
             </div>
           ) : (

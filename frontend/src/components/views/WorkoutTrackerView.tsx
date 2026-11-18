@@ -92,7 +92,7 @@ export function WorkoutTrackerView({
   })
 
   // Filter steps for today or selected date
-  const todayStr = new Date().toISOString().split("T")[0]
+  const todayStr = new Date().toLocaleDateString("en-CA")
   const activeDate = filterDate || todayStr
 
   const maleTodayStep = stepLogs.find((s) => s.date === activeDate && s.person === "ฝ่ายชาย")
