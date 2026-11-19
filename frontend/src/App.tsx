@@ -55,6 +55,27 @@ type ViewKey =
   | "sheetsync"
   | "settings"
 
+const STORAGE_FOODS_CACHE_KEY = "finess_cached_foods"
+
+function getCachedFoods(): any[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_FOODS_CACHE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function saveCachedFoods(foods: any[]) {
+  try {
+    if (Array.isArray(foods) && foods.length > 0) {
+      localStorage.setItem(STORAGE_FOODS_CACHE_KEY, JSON.stringify(foods))
+    }
+  } catch {}
+}
+
 export default function App() {
   const queryClient = useQueryClient()
   const [passcode, setPasscode] = React.useState<string>(getSavedPasscode())
@@ -145,6 +166,9 @@ export default function App() {
       if (data?.stepLogs && Array.isArray(data.stepLogs)) {
         saveAllStepLogs(data.stepLogs)
       }
+      if (data?.foods && Array.isArray(data.foods) && data.foods.length > 0) {
+        saveCachedFoods(data.foods)
+      }
 
       return data
     },
@@ -206,9 +230,12 @@ export default function App() {
     setAddMealOpen(true)
   }
 
-  // Data from GAS
+  // Data from GAS (with local cache fallback for foods so search never disappears)
   const meals = initialData?.meals || []
-  const foods = initialData?.foods || []
+  const foods =
+    initialData?.foods && initialData.foods.length > 0
+      ? initialData.foods
+      : getCachedFoods()
   const healthLogs = initialData?.healthLogs || []
   const rawSheets = initialData?.rawSheets || []
 

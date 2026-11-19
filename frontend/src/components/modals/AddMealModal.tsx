@@ -18,7 +18,7 @@ interface AddMealModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSave: (meal: any) => Promise<void>
-  foods: any[]
+  foods?: any[]
   defaultPerson?: string
   initialFood?: any
   initialDate?: string
@@ -70,7 +70,7 @@ export function AddMealModal({
   open,
   onOpenChange,
   onSave,
-  foods,
+  foods = [],
   defaultPerson = "ฝ่ายชาย",
   initialFood = null,
   initialDate = "",
@@ -83,9 +83,9 @@ export function AddMealModal({
 
   // Options for Food DB searchable dropdown
   const foodOptions = React.useMemo(() => {
-    return foods.map((f) => ({
+    return (foods || []).map((f) => ({
       value: String(f.id || f.code || f.name),
-      label: `${f.name} [${f.category}] • ${f.calories} kcal (P: ${f.protein}g, C: ${f.carbs}g, F: ${f.fat}g)`
+      label: `${f.name} [${f.category || "ทั่วไป"}] • ${f.calories || 0} kcal (P: ${f.protein || 0}g, C: ${f.carbs || 0}g, F: ${f.fat || 0}g)`
     }))
   }, [foods])
 
@@ -185,7 +185,7 @@ export function AddMealModal({
       updateItem(itemId, { selectedFoodId: "" })
       return
     }
-    const f = foods.find((item) => String(item.id || item.code || item.name) === String(foodId))
+    const f = (foods || []).find((item) => String(item.id || item.code || item.name) === String(foodId))
     if (f) {
       const curItem = items.find((it) => it.id === itemId)
       const servNum = curItem ? (typeof curItem.servings === "number" ? curItem.servings : (parseFloat(String(curItem.servings)) || 1)) : 1
@@ -430,24 +430,35 @@ export function AddMealModal({
                   </div>
                 </div>
 
-                {/* Quick select from Food DB with Type to Search */}
-                {foods.length > 0 && (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs text-emerald-400 font-medium flex items-center gap-1">
-                        <span>🔍</span> เลือกด่วนจากคลังเมนูอาหาร:
-                      </Label>
-                      <span className="text-[10px] text-slate-400">พิมพ์ค้นหาได้</span>
-                    </div>
-                    <SearchableSelect
-                      options={foodOptions}
-                      value={item.selectedFoodId}
-                      onChange={(val) => handleSelectFoodForItem(item.id, val)}
-                      placeholder="-- พิมพ์ชื่อเมนูอาหารเพื่อเลือกด่วน --"
-                      searchPlaceholder="พิมพ์ค้นหา เช่น อกไก่, ข้าวสวย, ไข่เจียว, หมาล่าอี้จา..."
-                    />
+                {/* Quick select from Food DB with Type to Search (พิมพ์ค้นหาได้) */}
+                <div className="space-y-1.5 p-3 rounded-xl bg-[#0b0f19] border border-emerald-500/30 shadow-inner">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5">
+                      <span>🔍</span> เลือกด่วนจากคลังเมนูอาหาร (A หน้าเก็บเมนูอาหาร)
+                    </Label>
+                    <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                      พิมพ์ค้นหาได้ (Type to search)
+                    </span>
                   </div>
-                )}
+                  <SearchableSelect
+                    options={foodOptions}
+                    value={item.selectedFoodId}
+                    onChange={(val) => handleSelectFoodForItem(item.id, val)}
+                    placeholder={
+                      foods && foods.length > 0
+                        ? "-- พิมพ์ชื่อเมนูอาหารเพื่อค้นหาด่วน (Type to search) --"
+                        : "-- กำลังโหลดคลังเมนูอาหารจาก Google Sheets... --"
+                    }
+                    searchPlaceholder="พิมพ์ค้นหา เช่น อกไก่, ข้าวสวย, Plante, ไข่ดาว, หมู, ผัก, EAT AM ARE..."
+                    disabled={!foods || foods.length === 0}
+                  />
+                  {foods && foods.length > 0 && (
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5 px-0.5">
+                      <span>คลังอาหารพร้อมใช้งาน ({foods.length} รายการ)</span>
+                      <span>เลือกแล้วระบบจะดึงแคลอรี่และสารอาหารให้อัตโนมัติ</span>
+                    </div>
+                  )}
+                </div>
 
                 {/* Food Name & Servings Multiplier */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
