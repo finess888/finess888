@@ -114,25 +114,25 @@ export function DashboardView({
     setCalorieSettings(getCalorieSettings())
   }, [selectedPerson, meals, healthLogs])
 
-  // Male Base Settings
+  // Male Base Settings (from Google Sheet)
   const maleSettings = calorieSettings.male
-  const maleMaintenance = maleSettings.maintenance || 2000
-  const maleDeficitTarget = maleSettings.deficit || 300
-  const maleTargetIntake = getIntakeTarget(maleSettings) // 2000 - 300 = 1700
-  const maleTargetProtein = maleSettings.protein !== undefined ? maleSettings.protein : 120
-  const maleTargetCarbs = maleSettings.carbs || 210
-  const maleTargetFat = maleSettings.fat || 60
+  const maleMaintenance = maleSettings.maintenance || 0
+  const maleDeficitTarget = maleSettings.deficit || 0
+  const maleTargetIntake = getIntakeTarget(maleSettings)
+  const maleTargetProtein = maleSettings.protein || 0
+  const maleTargetCarbs = maleSettings.carbs || 0
+  const maleTargetFat = maleSettings.fat || 0
   const maleStartWeight = 100.0
   const maleGoalWeight = 70.0
 
-  // Female Base Settings
+  // Female Base Settings (from Google Sheet)
   const femaleSettings = calorieSettings.female
-  const femaleMaintenance = femaleSettings.maintenance || 1700
-  const femaleDeficitTarget = femaleSettings.deficit || 300
-  const femaleTargetIntake = getIntakeTarget(femaleSettings) // 1700 - 300 = 1400
-  const femaleTargetProtein = femaleSettings.protein !== undefined ? femaleSettings.protein : 104
-  const femaleTargetCarbs = femaleSettings.carbs || 130
-  const femaleTargetFat = femaleSettings.fat || 40
+  const femaleMaintenance = femaleSettings.maintenance || 0
+  const femaleDeficitTarget = femaleSettings.deficit || 0
+  const femaleTargetIntake = getIntakeTarget(femaleSettings)
+  const femaleTargetProtein = femaleSettings.protein || 0
+  const femaleTargetCarbs = femaleSettings.carbs || 0
+  const femaleTargetFat = femaleSettings.fat || 0
   const femaleStartWeight = 65.0
   const femaleGoalWeight = 50.0
 

@@ -10,13 +10,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Flame, Target, Utensils, Sparkles, RefreshCcw, Footprints, Sliders } from "lucide-react"
+import { Flame, Target, Utensils, Sparkles, Footprints, Sliders } from "lucide-react"
 import {
   AllCalorieSettings,
   PersonCalorieSettings,
   getCalorieSettings,
   saveCalorieSettings,
-  DEFAULT_CALORIE_SETTINGS,
   getIntakeTarget,
 } from "@/lib/calorieSettings"
 import { callGasApi } from "@/api/gasClient"
@@ -97,12 +96,6 @@ export function CalorieSettingsModal({
       }
       onOpenChange(false)
     }
-  }
-
-  const handleReset = () => {
-    const defaultVal = DEFAULT_CALORIE_SETTINGS[activeTab]
-    updateCurrentPerson(defaultVal)
-    toast.info(`คืนค่าเริ่มต้นสำหรับ ${activeTab === "male" ? "ฝ่ายชาย" : "ฝ่ายหญิง"}`)
   }
 
   return (
@@ -321,17 +314,7 @@ export function CalorieSettingsModal({
           </div>
         </div>
 
-        <DialogFooter className="flex items-center justify-between sm:justify-between gap-2 pt-2 border-t border-[#26334d]">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={handleReset}
-            className="text-xs text-slate-400 hover:text-white flex items-center gap-1 px-2"
-          >
-            <RefreshCcw className="h-3.5 w-3.5" />
-            คืนค่าเริ่มต้น
-          </Button>
-
+        <DialogFooter className="flex items-center justify-end gap-2 pt-2 border-t border-[#26334d]">
           <div className="flex items-center gap-2">
             <Button
               type="button"

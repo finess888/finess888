@@ -12,22 +12,22 @@ export interface AllCalorieSettings {
   female: PersonCalorieSettings
 }
 
-export const DEFAULT_CALORIE_SETTINGS: AllCalorieSettings = {
+export const EMPTY_CALORIE_SETTINGS: AllCalorieSettings = {
   male: {
-    maintenance: 2000,
-    deficit: 300,
-    protein: 120,
-    carbs: 210,
-    fat: 60,
-    stepGoal: 8000,
+    maintenance: 0,
+    deficit: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+    stepGoal: 0,
   },
   female: {
-    maintenance: 1700,
-    deficit: 300,
-    protein: 104,
-    carbs: 130,
-    fat: 40,
-    stepGoal: 8000,
+    maintenance: 0,
+    deficit: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+    stepGoal: 0,
   },
 }
 
@@ -39,14 +39,14 @@ export function getCalorieSettings(): AllCalorieSettings {
     if (raw) {
       const parsed = JSON.parse(raw)
       return {
-        male: { ...DEFAULT_CALORIE_SETTINGS.male, ...parsed.male },
-        female: { ...DEFAULT_CALORIE_SETTINGS.female, ...parsed.female },
+        male: { ...EMPTY_CALORIE_SETTINGS.male, ...parsed.male },
+        female: { ...EMPTY_CALORIE_SETTINGS.female, ...parsed.female },
       }
     }
   } catch (err) {
     console.error("Error reading calorie settings:", err)
   }
-  return DEFAULT_CALORIE_SETTINGS
+  return EMPTY_CALORIE_SETTINGS
 }
 
 export function saveCalorieSettings(settings: AllCalorieSettings): void {
@@ -58,5 +58,5 @@ export function saveCalorieSettings(settings: AllCalorieSettings): void {
 }
 
 export function getIntakeTarget(personSettings: PersonCalorieSettings): number {
-  return Math.max(500, (personSettings.maintenance || 2000) - (personSettings.deficit || 0))
+  return Math.max(0, (personSettings.maintenance || 0) - (personSettings.deficit || 0))
 }

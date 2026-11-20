@@ -9,6 +9,7 @@ const SPREADSHEET_ID = '1yP5DwepfHxGoP0_OYx3zTXZTEdijbIt0aQj_1wTPuGs';
 const SHEET_FOOD_DB = 'A หน้าเก็บเมนูอาหาร';
 const SHEET_DAILY_LOG = 'B หน้าจดบันทึก';
 const SHEET_DASHBOARD = 'C หน้าแสดงผลลัพธ์รายวัน';
+const SHEET_SETTINGS = 'D ตั้งค่าเป้าหมาย';
 
 function getSpreadsheet() {
   return SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -283,25 +284,8 @@ function handleGetInitialData(ss) {
     };
   });
 
-  // 4. Calorie Settings & Targets
-  let calorieSettings = null;
-  const rawCalorieSettings = PropertiesService.getScriptProperties().getProperty('CALORIE_SETTINGS');
-  if (rawCalorieSettings) {
-    try {
-      calorieSettings = JSON.parse(rawCalorieSettings);
-    } catch (e) {}
-  }
-  if (!calorieSettings) {
-    calorieSettings = {
-      male: { maintenance: 2000, deficit: 300, protein: 120, carbs: 210, fat: 60, stepGoal: 8000 },
-      female: { maintenance: 1700, deficit: 300, protein: 104, carbs: 130, fat: 40, stepGoal: 8000 }
-    };
-  } else {
-    if (!calorieSettings.male) calorieSettings.male = { maintenance: 2000, deficit: 300, protein: 120, carbs: 210, fat: 60, stepGoal: 8000 };
-    if (!calorieSettings.female) calorieSettings.female = { maintenance: 1700, deficit: 300, protein: 104, carbs: 130, fat: 40, stepGoal: 8000 };
-    if (!calorieSettings.male.stepGoal) calorieSettings.male.stepGoal = 8000;
-    if (!calorieSettings.female.stepGoal) calorieSettings.female.stepGoal = 8000;
-  }
+  // 4. Calorie Settings & Targets (read directly from sheet)
+  const calorieSettings = readCalorieSettingsFromSheet(ss);
 
   // 5. Projects
   let projects = null;
@@ -342,17 +326,17 @@ function handleGetInitialData(ss) {
     stepLogs: stepLogs || [],
     targets: {
       male: {
-        calories: calorieSettings.male ? calorieSettings.male.maintenance : 2000,
-        protein: calorieSettings.male ? calorieSettings.male.protein : 120,
-        carbs: calorieSettings.male ? calorieSettings.male.carbs : 210,
-        fat: calorieSettings.male ? calorieSettings.male.fat : 60,
+        calories: calorieSettings.male.maintenance,
+        protein: calorieSettings.male.protein,
+        carbs: calorieSettings.male.carbs,
+        fat: calorieSettings.male.fat,
         targetWeight: 70
       },
       female: {
-        calories: calorieSettings.female ? calorieSettings.female.maintenance : 1400,
-        protein: calorieSettings.female ? calorieSettings.female.protein : 104,
-        carbs: calorieSettings.female ? calorieSettings.female.carbs : 130,
-        fat: calorieSettings.female ? calorieSettings.female.fat : 40,
+        calories: calorieSettings.female.maintenance,
+        protein: calorieSettings.female.protein,
+        carbs: calorieSettings.female.carbs,
+        fat: calorieSettings.female.fat,
         targetWeight: 50
       }
     }
@@ -803,21 +787,73 @@ function handleDeduplicateFoodItems(ss) {
   return { success: true, removedCount: rowsToDelete.length };
 }
 
+function getOrCreateSettingsSheet(ss) {
+  let sheet = ss.getSheetByName(SHEET_SETTINGS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_SETTINGS);
+    sheet.getRange(1, 1, 3, 8).setValues([
+      ['key', 'person', 'maintenance', 'deficit', 'protein', 'carbs', 'fat', 'stepGoal'],
+      ['male', 'ฝ่ายชาย', 2300, 300, 120, 300, 65, 8000],
+      ['female', 'ฝ่ายหญิง', 1700, 300, 104, 130, 40, 8000]
+    ]);
+  }
+  return sheet;
+}
+
+function readCalorieSettingsFromSheet(ss) {
+  const sheet = getOrCreateSettingsSheet(ss);
+  const lastRow = sheet.getLastRow();
+  const result = {
+    male: { maintenance: 0, deficit: 0, protein: 0, carbs: 0, fat: 0, stepGoal: 0 },
+    female: { maintenance: 0, deficit: 0, protein: 0, carbs: 0, fat: 0, stepGoal: 0 }
+  };
+
+  if (lastRow >= 2) {
+    const rows = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
+    rows.forEach(row => {
+      const key = String(row[0] || '').trim();
+      if (key === 'male' || key === 'female') {
+        result[key] = {
+          maintenance: Number(row[2]) || 0,
+          deficit: Number(row[3]) || 0,
+          protein: Number(row[4]) || 0,
+          carbs: Number(row[5]) || 0,
+          fat: Number(row[6]) || 0,
+          stepGoal: Number(row[7]) || 0
+        };
+      }
+    });
+  }
+
+  return result;
+}
+
+function writeCalorieSettingsToSheet(ss, payload) {
+  const sheet = getOrCreateSettingsSheet(ss);
+  const male = payload.male || {};
+  const female = payload.female || {};
+  sheet.getRange(1, 1, 3, 8).setValues([
+    ['key', 'person', 'maintenance', 'deficit', 'protein', 'carbs', 'fat', 'stepGoal'],
+    ['male', 'ฝ่ายชาย', Number(male.maintenance) || 0, Number(male.deficit) || 0, Number(male.protein) || 0, Number(male.carbs) || 0, Number(male.fat) || 0, Number(male.stepGoal) || 0],
+    ['female', 'ฝ่ายหญิง', Number(female.maintenance) || 0, Number(female.deficit) || 0, Number(female.protein) || 0, Number(female.carbs) || 0, Number(female.fat) || 0, Number(female.stepGoal) || 0]
+  ]);
+}
+
 function handleSaveCalorieSettings(ss, payload) {
   if (!payload) return { success: false, message: 'Empty settings' };
 
-  PropertiesService.getScriptProperties().setProperty('CALORIE_SETTINGS', JSON.stringify(payload));
+  writeCalorieSettingsToSheet(ss, payload);
 
   // Also update 'C หน้าแสดงผลลัพธ์รายวัน' if it exists
   try {
     const dashSheet = ss.getSheetByName(SHEET_DASHBOARD) || ss.getSheets()[2];
     if (dashSheet && dashSheet.getLastRow() >= 6) {
-      const maleProtein = payload.male ? payload.male.protein : 120;
-      const maleMaintenance = payload.male ? payload.male.maintenance : 2000;
-      const maleStep = (payload.male && payload.male.stepGoal) ? payload.male.stepGoal : 8000;
-      const femaleProtein = payload.female ? payload.female.protein : 104;
-      const femaleMaintenance = payload.female ? payload.female.maintenance : 1700;
-      const femaleStep = (payload.female && payload.female.stepGoal) ? payload.female.stepGoal : 8000;
+      const maleProtein = Number(payload.male && payload.male.protein) || 0;
+      const maleMaintenance = Number(payload.male && payload.male.maintenance) || 0;
+      const maleStep = Number(payload.male && payload.male.stepGoal) || 0;
+      const femaleProtein = Number(payload.female && payload.female.protein) || 0;
+      const femaleMaintenance = Number(payload.female && payload.female.maintenance) || 0;
+      const femaleStep = Number(payload.female && payload.female.stepGoal) || 0;
 
       // Update row 6 (header titles)
       dashSheet.getRange(6, 2).setValue('🏋️‍♂️ สรุปโภชนาการรายวัน: ฝ่ายชาย (เป้า ' + maleMaintenance + ' kcal | โปรตีน ' + maleProtein + 'g | ' + Number(maleStep).toLocaleString() + ' ก้าว)');
