@@ -63,7 +63,7 @@ interface PersonDayStats {
   stepCount: number
   weight: number | null
   calorieDiff: number // target - actual
-  status: "good" | "bad" | "unrecorded" | "future"
+  status: "good" | "maintain" | "bad" | "unrecorded" | "future"
   statusLabel: string
   statusReason: string
 }
@@ -81,7 +81,7 @@ interface DayData {
   coupleStatusShortLabel: string
   coupleStatusBadgeColor: string
   // Active filtered view helpers
-  activeStatus: "good" | "bad" | "unrecorded" | "future"
+  activeStatus: "good" | "maintain" | "bad" | "unrecorded" | "future"
   activeLabel: string
   activeCalories: number
   activeTargetCalories: number
@@ -173,10 +173,11 @@ export function CalendarView({
     personMeals: any[],
     stepCount: number,
     targetCal: number,
+    maintenanceCal: number,
     targetStep: number,
     targetProt: number,
     isFuture: boolean
-  ): { status: "good" | "bad" | "unrecorded" | "future"; statusLabel: string; statusReason: string } => {
+  ): { status: "good" | "maintain" | "bad" | "unrecorded" | "future"; statusLabel: string; statusReason: string } => {
     const totalCal = personMeals.reduce((s, m) => s + (Number(m.calories || m.Calories) || 0), 0)
     const totalProt = personMeals.reduce((s, m) => s + (Number(m.protein || m.Protein) || 0), 0)
     const diff = targetCal - totalCal
@@ -193,6 +194,9 @@ export function CalendarView({
       }
       if (totalCal <= targetCal) {
         return { status: "good", statusLabel: "คุมดี ✅", statusReason: `อยู่ในโควต้า (เหลือ ${diff.toLocaleString()} kcal)` }
+      }
+      if (maintenanceCal > targetCal && totalCal <= maintenanceCal) {
+        return { status: "maintain", statusLabel: "ประคอง 🟡", statusReason: `เกินเป้าตัด +${Math.abs(diff).toLocaleString()} kcal (ไม่เกินเมนเทน ${maintenanceCal.toLocaleString()})` }
       }
       return { status: "bad", statusLabel: "เกินเป้า ❌", statusReason: `กินเกิน +${Math.abs(diff).toLocaleString()} kcal` }
     }
@@ -226,6 +230,9 @@ export function CalendarView({
         return { status: "good", statusLabel: "ดีเยี่ยม 🌟", statusReason: "คุมแคลอรี่ได้ดีและถึงเป้ากิจกรรม/โปรตีน" }
       }
       return { status: "good", statusLabel: "คุมดี ✅", statusReason: "แคลอรี่อยู่ในโควต้า" }
+    }
+    if (maintenanceCal > targetCal && totalCal <= maintenanceCal) {
+      return { status: "maintain", statusLabel: "ประคอง 🟡", statusReason: `เกินเป้าตัด +${Math.abs(diff).toLocaleString()} kcal (ไม่เกินเมนเทน ${maintenanceCal.toLocaleString()})` }
     }
     return { status: "bad", statusLabel: "เกินเป้า ❌", statusReason: `กินเกิน +${Math.abs(diff).toLocaleString()} kcal` }
   }
@@ -270,6 +277,7 @@ export function CalendarView({
         maleMeals,
         maleSteps,
         maleTargetIntake,
+        maleSettings.maintenance || maleTargetIntake,
         maleStepTarget,
         maleProteinTarget,
         isFuture
@@ -311,6 +319,7 @@ export function CalendarView({
         femaleMeals,
         femaleSteps,
         femaleTargetIntake,
+        femaleSettings.maintenance || femaleTargetIntake,
         femaleStepTarget,
         femaleProteinTarget,
         isFuture
@@ -906,6 +915,7 @@ export function CalendarView({
           {/* Actual days in month */}
           {monthDays.map((day) => {
             const isGood = isAll ? day.coupleStatus === "both_good" : day.activeStatus === "good"
+            const isMaintain = !isAll && day.activeStatus === "maintain"
             const isBad = isAll ? day.coupleStatus === "both_bad" : day.activeStatus === "bad"
             const isFuture = day.isFuture
 
@@ -920,6 +930,8 @@ export function CalendarView({
                 } ${
                   isGood
                     ? "bg-gradient-to-br from-[#0c1c1b] to-[#112423] hover:from-[#0e2423] hover:to-[#152e2c]"
+                    : isMaintain
+                    ? "bg-gradient-to-br from-[#211b0d] to-[#261f0f] hover:from-[#2b2311] hover:to-[#302713]"
                     : isBad
                     ? "bg-gradient-to-br from-[#201016] to-[#251520] hover:from-[#2a131c] hover:to-[#2e1724]"
                     : isFuture
@@ -968,6 +980,12 @@ export function CalendarView({
                           <span className="hidden sm:inline">ดี</span>
                         </Badge>
                       )}
+                      {day.activeStatus === "maintain" && (
+                        <Badge className="bg-amber-500 text-slate-950 font-extrabold text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 flex items-center gap-0.5 shadow-sm border-none">
+                          <span className="hidden sm:inline">ประคอง</span>
+                          <span className="sm:hidden">🟡</span>
+                        </Badge>
+                      )}
                       {day.activeStatus === "bad" && (
                         <Badge className="bg-rose-500 text-white font-extrabold text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 flex items-center gap-0.5 shadow-sm border-none">
                           <XCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3 stroke-[2.5]" />
@@ -989,6 +1007,8 @@ export function CalendarView({
                       className={`flex items-center justify-between text-[9px] sm:text-[10px] font-mono px-1 sm:px-1.5 py-0.5 rounded transition-all ${
                         day.male.status === "good"
                           ? "bg-emerald-950/40 text-emerald-300 border border-emerald-500/30"
+                          : day.male.status === "maintain"
+                          ? "bg-amber-950/40 text-amber-300 border border-amber-500/30"
                           : day.male.status === "bad"
                           ? "bg-rose-950/40 text-rose-300 border border-rose-500/30"
                           : "text-slate-500 bg-[#0b0f19]/30"
@@ -1003,7 +1023,7 @@ export function CalendarView({
                         )}
                       </span>
                       <span className="shrink-0">
-                        {day.male.status === "good" ? "✅" : day.male.status === "bad" ? "❌" : ""}
+                        {day.male.status === "good" ? "✅" : day.male.status === "maintain" ? "🟡" : day.male.status === "bad" ? "❌" : ""}
                       </span>
                     </div>
 
@@ -1012,6 +1032,8 @@ export function CalendarView({
                       className={`flex items-center justify-between text-[9px] sm:text-[10px] font-mono px-1 sm:px-1.5 py-0.5 rounded transition-all ${
                         day.female.status === "good"
                           ? "bg-pink-950/40 text-pink-300 border border-pink-500/30"
+                          : day.female.status === "maintain"
+                          ? "bg-amber-950/40 text-amber-300 border border-amber-500/30"
                           : day.female.status === "bad"
                           ? "bg-rose-950/40 text-rose-300 border border-rose-500/30"
                           : "text-slate-500 bg-[#0b0f19]/30"
@@ -1026,7 +1048,7 @@ export function CalendarView({
                         )}
                       </span>
                       <span className="shrink-0">
-                        {day.female.status === "good" ? "✅" : day.female.status === "bad" ? "❌" : ""}
+                        {day.female.status === "good" ? "✅" : day.female.status === "maintain" ? "🟡" : day.female.status === "bad" ? "❌" : ""}
                       </span>
                     </div>
                   </div>
@@ -1037,7 +1059,11 @@ export function CalendarView({
                       <div>
                         <div
                           className={`text-[11px] sm:text-xs font-mono font-bold leading-tight ${
-                            day.activeStatus === "good" ? "text-emerald-300" : "text-rose-400"
+                            day.activeStatus === "good"
+                              ? "text-emerald-300"
+                              : day.activeStatus === "maintain"
+                              ? "text-amber-300"
+                              : "text-rose-400"
                           }`}
                         >
                           {day.activeCalories.toLocaleString()}
@@ -1050,6 +1076,10 @@ export function CalendarView({
                           {day.activeCalorieDiff >= 0 ? (
                             <span className="text-emerald-400">
                               เหลือ {day.activeCalorieDiff.toLocaleString()} kcal
+                            </span>
+                          ) : day.activeStatus === "maintain" ? (
+                            <span className="text-amber-400 font-semibold">
+                              +{Math.abs(day.activeCalorieDiff).toLocaleString()} kcal
                             </span>
                           ) : (
                             <span className="text-rose-400 font-semibold">
