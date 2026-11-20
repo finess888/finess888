@@ -58,11 +58,13 @@ interface PersonDayStats {
   totalCarbs: number
   totalFat: number
   targetCalories: number
+  maintenanceCalories: number
   targetSteps: number
   targetProtein: number
   stepCount: number
   weight: number | null
   calorieDiff: number // target - actual
+  maintenanceDiff: number // maintenance - actual
   status: "good" | "maintain" | "bad" | "unrecorded" | "future"
   statusLabel: string
   statusReason: string
@@ -85,7 +87,9 @@ interface DayData {
   activeLabel: string
   activeCalories: number
   activeTargetCalories: number
+  activeMaintenanceCalories: number
   activeCalorieDiff: number
+  activeMaintenanceDiff: number
   activeMealsCount: number
   activeStepCount: number
   activeProtein: number
@@ -181,6 +185,8 @@ export function CalendarView({
     const totalCal = personMeals.reduce((s, m) => s + (Number(m.calories || m.Calories) || 0), 0)
     const totalProt = personMeals.reduce((s, m) => s + (Number(m.protein || m.Protein) || 0), 0)
     const diff = targetCal - totalCal
+    const maintenanceDiff = maintenanceCal - totalCal
+    const overMaintenance = maintenanceCal > targetCal ? Math.abs(maintenanceDiff) : Math.abs(diff)
     const hasMeals = personMeals.length > 0
     const hasSteps = stepCount > 0
 
@@ -198,7 +204,7 @@ export function CalendarView({
       if (maintenanceCal > targetCal && totalCal <= maintenanceCal) {
         return { status: "maintain", statusLabel: "ประคอง 🟡", statusReason: `เกินเป้าตัด +${Math.abs(diff).toLocaleString()} kcal (ไม่เกินเมนเทน ${maintenanceCal.toLocaleString()})` }
       }
-      return { status: "bad", statusLabel: "เกินเป้า ❌", statusReason: `กินเกิน +${Math.abs(diff).toLocaleString()} kcal` }
+      return { status: "bad", statusLabel: "เกินเป้า ❌", statusReason: `กินเกินเมนเทน +${overMaintenance.toLocaleString()} kcal` }
     }
 
     if (criteria === "steps") {
@@ -234,7 +240,7 @@ export function CalendarView({
     if (maintenanceCal > targetCal && totalCal <= maintenanceCal) {
       return { status: "maintain", statusLabel: "ประคอง 🟡", statusReason: `เกินเป้าตัด +${Math.abs(diff).toLocaleString()} kcal (ไม่เกินเมนเทน ${maintenanceCal.toLocaleString()})` }
     }
-    return { status: "bad", statusLabel: "เกินเป้า ❌", statusReason: `กินเกิน +${Math.abs(diff).toLocaleString()} kcal` }
+    return { status: "bad", statusLabel: "เกินเป้า ❌", statusReason: `กินเกินเมนเทน +${overMaintenance.toLocaleString()} kcal` }
   }
 
   // Generate days in the selected month
@@ -283,6 +289,7 @@ export function CalendarView({
         isFuture
       )
 
+      const maleMaintenanceCal = maleSettings.maintenance || maleTargetIntake
       const maleStats: PersonDayStats = {
         meals: maleMeals,
         totalCalories: maleCals,
@@ -290,11 +297,13 @@ export function CalendarView({
         totalCarbs: maleCarb,
         totalFat: maleFat,
         targetCalories: maleTargetIntake,
+        maintenanceCalories: maleMaintenanceCal,
         targetSteps: maleStepTarget,
         targetProtein: maleProteinTarget,
         stepCount: maleSteps,
         weight: maleWeight,
         calorieDiff: maleTargetIntake - maleCals,
+        maintenanceDiff: maleMaintenanceCal - maleCals,
         status: maleEval.status,
         statusLabel: maleEval.statusLabel,
         statusReason: maleEval.statusReason,
@@ -325,6 +334,7 @@ export function CalendarView({
         isFuture
       )
 
+      const femaleMaintenanceCal = femaleSettings.maintenance || femaleTargetIntake
       const femaleStats: PersonDayStats = {
         meals: femaleMeals,
         totalCalories: femaleCals,
@@ -332,11 +342,13 @@ export function CalendarView({
         totalCarbs: femaleCarb,
         totalFat: femaleFat,
         targetCalories: femaleTargetIntake,
+        maintenanceCalories: femaleMaintenanceCal,
         targetSteps: femaleStepTarget,
         targetProtein: femaleProteinTarget,
         stepCount: femaleSteps,
         weight: femaleWeight,
         calorieDiff: femaleTargetIntake - femaleCals,
+        maintenanceDiff: femaleMaintenanceCal - femaleCals,
         status: femaleEval.status,
         statusLabel: femaleEval.statusLabel,
         statusReason: femaleEval.statusReason,
@@ -395,7 +407,9 @@ export function CalendarView({
       let activeLabel = ""
       let activeCalories = 0
       let activeTargetCalories = 0
+      let activeMaintenanceCalories = 0
       let activeCalorieDiff = 0
+      let activeMaintenanceDiff = 0
       let activeMealsCount = 0
       let activeStepCount = 0
       let activeProtein = 0
@@ -406,7 +420,9 @@ export function CalendarView({
         activeLabel = maleStats.statusLabel
         activeCalories = maleStats.totalCalories
         activeTargetCalories = maleStats.targetCalories
+        activeMaintenanceCalories = maleStats.maintenanceCalories
         activeCalorieDiff = maleStats.calorieDiff
+        activeMaintenanceDiff = maleStats.maintenanceDiff
         activeMealsCount = maleStats.meals.length
         activeStepCount = maleStats.stepCount
         activeProtein = maleStats.totalProtein
@@ -416,7 +432,9 @@ export function CalendarView({
         activeLabel = femaleStats.statusLabel
         activeCalories = femaleStats.totalCalories
         activeTargetCalories = femaleStats.targetCalories
+        activeMaintenanceCalories = femaleStats.maintenanceCalories
         activeCalorieDiff = femaleStats.calorieDiff
+        activeMaintenanceDiff = femaleStats.maintenanceDiff
         activeMealsCount = femaleStats.meals.length
         activeStepCount = femaleStats.stepCount
         activeProtein = femaleStats.totalProtein
@@ -436,7 +454,9 @@ export function CalendarView({
         activeLabel = coupleStatusLabel
         activeCalories = maleStats.totalCalories + femaleStats.totalCalories
         activeTargetCalories = maleStats.targetCalories + femaleStats.targetCalories
+        activeMaintenanceCalories = maleStats.maintenanceCalories + femaleStats.maintenanceCalories
         activeCalorieDiff = activeTargetCalories - activeCalories
+        activeMaintenanceDiff = activeMaintenanceCalories - activeCalories
         activeMealsCount = maleStats.meals.length + femaleStats.meals.length
         activeStepCount = maleStats.stepCount + femaleStats.stepCount
         activeProtein = Number((maleStats.totalProtein + femaleStats.totalProtein).toFixed(1))
@@ -459,7 +479,9 @@ export function CalendarView({
         activeLabel,
         activeCalories,
         activeTargetCalories,
+        activeMaintenanceCalories,
         activeCalorieDiff,
+        activeMaintenanceDiff,
         activeMealsCount,
         activeStepCount,
         activeProtein,
@@ -476,6 +498,8 @@ export function CalendarView({
     healthLogs,
     maleTargetIntake,
     femaleTargetIntake,
+    maleSettings.maintenance,
+    femaleSettings.maintenance,
     maleStepTarget,
     femaleStepTarget,
     maleProteinTarget,
@@ -1083,7 +1107,7 @@ export function CalendarView({
                             </span>
                           ) : (
                             <span className="text-rose-400 font-semibold">
-                              +{Math.abs(day.activeCalorieDiff).toLocaleString()} kcal
+                              +{Math.abs(day.activeMaintenanceDiff).toLocaleString()} kcal
                             </span>
                           )}
                         </div>
