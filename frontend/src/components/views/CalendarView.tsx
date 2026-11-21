@@ -1097,19 +1097,19 @@ export function CalendarView({
                           </span>
                         </div>
                         <div className="text-[9px] sm:text-[10px] leading-none">
-                          {day.activeCalorieDiff >= 0 ? (
-                            <span className="text-emerald-400">
-                              เหลือ {day.activeCalorieDiff.toLocaleString()} kcal
-                            </span>
-                          ) : day.activeStatus === "maintain" ? (
-                            <span className="text-amber-400 font-semibold">
-                              +{Math.abs(day.activeCalorieDiff).toLocaleString()} kcal
-                            </span>
-                          ) : (
-                            <span className="text-rose-400 font-semibold">
-                              +{Math.abs(day.activeMaintenanceDiff).toLocaleString()} kcal
-                            </span>
-                          )}
+                          <span
+                            className={
+                              day.activeStatus === "good"
+                                ? "text-emerald-400"
+                                : day.activeStatus === "maintain"
+                                ? "text-amber-400 font-semibold"
+                                : "text-rose-400 font-semibold"
+                            }
+                          >
+                            {day.activeMaintenanceDiff <= 0
+                              ? `+${Math.abs(day.activeMaintenanceDiff).toLocaleString()} kcal`
+                              : `-${day.activeMaintenanceDiff.toLocaleString()} kcal`}
+                          </span>
                         </div>
                       </div>
                     ) : !isFuture ? (
